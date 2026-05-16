@@ -6,7 +6,7 @@
     <title>龙傲天俱乐部 · 玩家中心</title>
     <style>
         * { box-sizing: border-box; }
-        body { background: #f8fafc; margin: 0; padding: 15px; font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; color: #0f172a; }
+        body { background: #f8fafc; margin: 0; padding: 15px; font-family: system-ui, sans-serif; color: #0f172a; }
         .container { max-width: 650px; margin: 0 auto; }
         .card { background: white; border-radius: 24px; padding: 18px; margin-bottom: 18px; border: 1px solid #e2e8f0; }
         h2, h3 { margin: 0 0 12px 0; border-left: 4px solid #f59e0b; padding-left: 12px; }
@@ -14,18 +14,16 @@
         button { background: #f59e0b; color: white; font-weight: bold; border: none; cursor: pointer; }
         .balance { font-size: 28px; font-weight: bold; color: #f59e0b; }
         .flex { display: flex; gap: 10px; flex-wrap: wrap; }
-        .order-item, .equip-item { background: #f8fafc; border-radius: 20px; padding: 12px; margin-bottom: 12px; border-left: 4px solid #f59e0b; }
+        .order-item { background: #f8fafc; border-radius: 20px; padding: 12px; margin-bottom: 12px; border-left: 4px solid #f59e0b; }
         .chat-box { max-height: 200px; overflow-y: auto; background: #f1f5f9; border-radius: 16px; padding: 10px; margin: 8px 0; font-size: 13px; }
         .chat-msg { padding: 6px 10px; margin: 4px 0; border-radius: 20px; background: white; }
         .chat-msg.user { background: #f59e0b; color: white; text-align: right; }
-        .coupon-item { background: #fef3c7; border-left: 4px solid #f59e0b; }
-        .festival-badge { background: #dcfce7; padding: 8px; border-radius: 20px; margin-bottom: 12px; text-align: center; font-size: 13px; }
     </style>
 </head>
 <body>
 <div class="container" id="app"></div>
 <script>
-// ---------- 初始化数据 ----------
+// 初始化数据
 if (!localStorage.getItem('club_users')) {
     localStorage.setItem('club_users', JSON.stringify([
         { uid: 'u1', username: '测试玩家', loginId: 'player', pwd: '111', balance: 500, level: 'user', banned: false, coupons: [] }
@@ -33,7 +31,7 @@ if (!localStorage.getItem('club_users')) {
 }
 if (!localStorage.getItem('club_gamers')) {
     localStorage.setItem('club_gamers', JSON.stringify([
-        { gid: 'g1', username: '墨渊', loginId: 'moyuan', pwd: '123456', skills: [{ type: '段位', target: '王牌', price: 80 }], balance: 0, level: 'junior_gamer', banned: false, approved: true, verifyStatus: 'verified', totalOrders: 0 }
+        { gid: 'g1', username: '墨渊', loginId: 'moyuan', pwd: '123456', skills: [], balance: 0, level: 'junior_gamer', banned: false, approved: true, verifyStatus: 'verified', totalOrders: 0 }
     ]));
 }
 if (!localStorage.getItem('club_orders')) localStorage.setItem('club_orders', JSON.stringify([]));
@@ -42,69 +40,27 @@ if (!localStorage.getItem('club_admin')) localStorage.setItem('club_admin', JSON
 if (!localStorage.getItem('club_recharge_reqs')) localStorage.setItem('club_recharge_reqs', JSON.stringify([]));
 if (!localStorage.getItem('club_withdraw_reqs')) localStorage.setItem('club_withdraw_reqs', JSON.stringify([]));
 if (!localStorage.getItem('club_complaints')) localStorage.setItem('club_complaints', JSON.stringify([]));
-if (!localStorage.getItem('club_announcements')) localStorage.setItem('club_announcements', JSON.stringify({ user: '', gamer: '' }));
+if (!localStorage.getItem('club_announcements')) localStorage.setItem('club_announcements', JSON.stringify({ user: '' }));
 if (!localStorage.getItem('club_settings')) localStorage.setItem('club_settings', JSON.stringify({ platformFee: 10, minWithdrawUser: 20 }));
-if (!localStorage.getItem('club_coupons')) localStorage.setItem('club_coupons', JSON.stringify([])); // 全局优惠券模板
-if (!localStorage.getItem('club_festival_log')) localStorage.setItem('club_festival_log', JSON.stringify({})); // 记录每年节日是否已发放
+if (!localStorage.getItem('club_market_prices')) {
+    localStorage.setItem('club_market_prices', JSON.stringify({
+        base: { '和平精英': 20, '地铁逃生': 25, '百万撤离': 30, '千万撤离': 40, 'PUBG': 20, '三角洲行动': 25 },
+        keywords: { '无敌战神': 100, '战神': 60, '王牌': 20, '皇冠': 15, '星钻': 10, '热成像': 20, '六套': 25, '七套': 35, '八套': 45, '九套': 55, '十套': 70, '百万撤离': 30, '千万撤离': 40, '地铁': 15 }
+    }));
+}
 
-// 节日列表
-const festivals = [
-    { name: '春节', month: 1, day: 1, value: 20, minAmount: 50 },
-    { name: '劳动节', month: 5, day: 1, value: 15, minAmount: 50 },
-    { name: '中秋节', month: 8, day: 15, value: 15, minAmount: 50 },
-    { name: '国庆节', month: 10, day: 1, value: 20, minAmount: 50 },
-    { name: '双十一', month: 11, day: 11, value: 30, minAmount: 100 },
-    { name: '元旦', month: 1, day: 1, value: 10, minAmount: 30 }
-];
-
-// 检查并发放节日福利
-function checkAndSendFestivalCoupons(userId) {
-    let festivalLog = JSON.parse(localStorage.getItem('club_festival_log') || '{}');
-    let today = new Date();
-    let todayStr = `${today.getFullYear()}-${today.getMonth()+1}-${today.getDate()}`;
-    
-    for (let f of festivals) {
-        let festivalDate = `${today.getFullYear()}-${f.month}-${f.day}`;
-        let logKey = `${userId}_${festivalDate}`;
-        if (todayStr === festivalDate && !festivalLog[logKey]) {
-            // 发放优惠券
-            let users = JSON.parse(localStorage.getItem('club_users') || '[]');
-            let user = users.find(u => u.uid === userId);
-            if (user) {
-                if (!user.coupons) user.coupons = [];
-                user.coupons.push({
-                    id: Date.now(),
-                    name: `${f.name}福利券`,
-                    value: f.value,
-                    minAmount: f.minAmount,
-                    expireTime: Date.now() + 30 * 86400000,
-                    used: false
-                });
-                localStorage.setItem('club_users', JSON.stringify(users));
-                festivalLog[logKey] = true;
-                localStorage.setItem('club_festival_log', JSON.stringify(festivalLog));
-                return true;
-            }
+function getMarketPrices() { return JSON.parse(localStorage.getItem('club_market_prices') || '{}'); }
+function getMarketPrice(game, description) {
+    let prices = getMarketPrices();
+    let base = prices.base?.[game] || 20;
+    let bonus = 0;
+    if (prices.keywords) {
+        for (let [kw, val] of Object.entries(prices.keywords)) {
+            if (description.includes(kw)) bonus = Math.max(bonus, val);
         }
     }
-    return false;
+    return base + bonus;
 }
-
-// 市场价自动计算（AI智能）
-function getMarketPrice(game, description) {
-    let basePrice = 30;
-    const gamePrices = { '和平精英': 40, '地铁逃生': 50, '百万撤离': 60, '千万撤离': 80, 'PUBG': 45, '三角洲行动': 55, '吃丹修仙': 35 };
-    if (gamePrices[game]) basePrice = gamePrices[game];
-    if (description.includes('王牌')) basePrice += 40;
-    if (description.includes('皇冠')) basePrice += 25;
-    if (description.includes('星钻')) basePrice += 15;
-    if (description.includes('热成像')) basePrice += 30;
-    if (description.includes('六套')) basePrice += 50;
-    if (description.includes('百万')) basePrice += 30;
-    if (description.includes('千万')) basePrice += 60;
-    return basePrice;
-}
-
 function getUsers() { return JSON.parse(localStorage.getItem('club_users') || '[]'); }
 function setUsers(v) { localStorage.setItem('club_users', JSON.stringify(v)); }
 function getGamers() { return JSON.parse(localStorage.getItem('club_gamers') || '[]'); }
@@ -125,7 +81,7 @@ function getSettings() { return JSON.parse(localStorage.getItem('club_settings')
 let currentUser = null;
 function saveSession(user) { currentUser = user; localStorage.setItem('club_session', JSON.stringify(user ? { uid: user.uid, role: 'user' } : null)); renderApp(); }
 function getSession() { let raw = localStorage.getItem('club_session'); if (!raw) return null; let sess = JSON.parse(raw); if (!sess) return null; let users = getUsers(); return users.find(u => u.uid === sess.uid) || null; }
-function changeUserBalance(uid, amount, remark) { let users = getUsers(); let u = users.find(x => x.uid === uid); if (u) { u.balance += amount; setUsers(users); } if (currentUser?.uid === uid) currentUser = u; renderApp(); }
+function changeUserBalance(uid, amount) { let users = getUsers(); let u = users.find(x => x.uid === uid); if (u) { u.balance += amount; setUsers(users); } if (currentUser?.uid === uid) currentUser = u; renderApp(); }
 
 function renderApp() {
     let container = document.getElementById('app');
@@ -133,12 +89,7 @@ function renderApp() {
     let sess = getSession();
     if (!sess) { renderLogin(); return; }
     currentUser = sess;
-    if (currentUser.banned) { container.innerHTML = `<div class="card"><h2>⛔ 账号已被封禁</h2><button onclick="localStorage.removeItem('club_session');location.reload()">重新登录</button></div>`; return; }
-    
-    // 检查节日福利
-    let hasFestival = checkAndSendFestivalCoupons(currentUser.uid);
-    if (hasFestival) { renderApp(); return; }
-    
+    if (currentUser.banned) { container.innerHTML = `<div class="card"><h2>⛔ 账号已被封禁</h2></div>`; return; }
     renderUserPanel();
 }
 
@@ -147,16 +98,16 @@ function renderLogin() {
     document.getElementById('app').innerHTML = html;
     document.getElementById('loginBtn')?.addEventListener('click', () => {
         let id = document.getElementById('loginId').value, pwd = document.getElementById('loginPwd').value;
-        let users = getUsers();
-        let user = users.find(u => u.loginId === id && u.pwd === pwd);
-        if (user) { saveSession(user); } else alert("账号或密码错误");
+        let user = getUsers().find(u => u.loginId === id && u.pwd === pwd);
+        if (user) saveSession(user);
+        else alert("账号或密码错误");
     });
     document.getElementById('regBtn')?.addEventListener('click', () => {
         let name = document.getElementById('regName').value, lid = document.getElementById('regLoginId').value, pwd = document.getElementById('regPwd').value;
         if (!name || !lid || !pwd) { alert("填完整"); return; }
-        let users = getUsers();
-        if (users.find(u => u.loginId === lid)) { alert("账号已存在"); return; }
+        if (getUsers().find(u => u.loginId === lid)) { alert("账号已存在"); return; }
         let newUser = { uid: 'u' + Date.now(), username: name, loginId: lid, pwd: pwd, balance: 0, level: 'user', banned: false, coupons: [] };
+        let users = getUsers();
         users.push(newUser);
         setUsers(users);
         saveSession(newUser);
@@ -175,230 +126,92 @@ function renderUserPanel() {
     
     let html = `
         <div class="card">
-            ${announcements.user ? `<div style="background:#fef3c7; padding:12px; border-radius:20px; margin-bottom:12px;">📢 ${announcements.user}</div>` : ''}
+            ${announcements.user ? `<div style="background:#fef3c7; padding:12px; border-radius:20px;">📢 ${announcements.user}</div>` : ''}
             <h2>🐉 ${u.username}</h2>
             <div>💰 余额：<span class="balance">${u.balance}</span> 元</div>
             <div class="flex"><button id="logoutBtn" style="background:#64748b;">切换账号</button><button id="withdrawBtn">提现</button></div>
         </div>
-        <div class="card"><h3>💰 充值</h3>
-            <select id="rechargeAmount"><option value="10">10元</option><option value="30">30元</option><option value="50">50元</option><option value="100">100元</option></select>
-            <div id="qrcodeArea" style="text-align:center; display:none; margin:12px 0;"><img id="qrcodeImg" src="https://i.postimg.cc/63SD7J84/mm-facetoface-collect-qrcode-1778001786663.png" style="max-width:180px; border-radius:16px;"><p>扫码支付后上传截图</p></div>
-            <input id="rechargeProof" placeholder="付款截图链接"><button id="showQrBtn">📷 显示收款码</button><button id="submitRechargeBtn">提交充值申请</button>
-        </div>
-        <div class="card"><h3>🎁 我的优惠券</h3>
-            <div id="couponList"></div>
-        </div>
+        <div class="card"><h3>💰 充值</h3><select id="rechargeAmount"><option value="10">10元</option><option value="30">30元</option><option value="50">50元</option><option value="100">100元</option></select><input id="rechargeProof" placeholder="付款截图链接"><button id="showQrBtn">📷 模拟支付</button><button id="submitRechargeBtn">提交充值申请</button></div>
+        <div class="card"><h3>🎁 优惠券</h3><div id="couponList">${availableCoupons.map(c => `<div>${c.name} 减${c.value}元 (满${c.minAmount}元)</div>`).join('') || '暂无'}</div></div>
         <div class="card"><h3>📝 发布订单</h3>
-            <select id="orderGame"><option value="和平精英">和平精英</option><option value="地铁逃生">地铁逃生</option><option value="百万撤离">百万撤离</option><option value="千万撤离">千万撤离</option><option value="PUBG">PUBG</option></select>
-            <textarea id="orderDesc" rows="2" placeholder="需求描述（如：代打王牌段位）"></textarea>
+            <select id="orderGame"><option value="和平精英">和平精英</option><option value="地铁逃生">地铁逃生</option><option value="百万撤离">百万撤离</option><option value="千万撤离">千万撤离</option></select>
+            <textarea id="orderDesc" rows="2" placeholder="输入关键词：无敌战神、热成像六套..."></textarea>
             <select id="targetGamer"><option value="">-- 不指定打手 --</option>${gamers.map(g => `<option value="${g.gid}|${g.username}">${g.username}</option>`).join('')}</select>
-            <div id="priceDisplay" style="background:#f1f5f9; border-radius:30px; padding:12px; margin:8px 0; text-align:center; font-weight:bold;">💰 市场价：<span id="marketPrice">0</span> 元</div>
-            <select id="couponSelect"><option value="">-- 不使用优惠券 --</option>${availableCoupons.map(c => `<option value="${c.id}" data-value="${c.value}" data-min="${c.minAmount}">${c.name} 减${c.value}元 (满${c.minAmount}元可用)</option>`).join('')}</select>
+            <div style="background:#f1f5f9; border-radius:30px; padding:12px; text-align:center;"><span style="font-weight:bold;">💰 市场价：<span id="marketPrice">0</span> 元</span></div>
+            <select id="couponSelect"><option value="">-- 不使用优惠券 --</option>${availableCoupons.map(c => `<option value="${c.id}" data-min="${c.minAmount}">${c.name} -${c.value}元 (满${c.minAmount}元)</option>`).join('')}</select>
             <button id="publishBtn">发布订单</button>
         </div>
         <div class="card"><h3>📋 我的订单</h3><div id="myOrders"></div></div>
-        <div class="card"><h3>🛒 装备商城</h3><div id="equipList"></div></div>
-        <div class="card"><h3>📞 投诉</h3><select id="complaintOrder"><option value="">-- 选择订单 --</option></select><textarea id="complaintReason" rows="2" placeholder="投诉原因"></textarea><button id="submitComplaintBtn">提交投诉</button><div id="myComplaints"></div></div>
     `;
     document.getElementById('app').innerHTML = html;
     
-    // 优惠券列表
-    let couponDiv = document.getElementById('couponList');
-    if (couponDiv) {
-        if (coupons.length === 0) couponDiv.innerHTML = "<div>暂无优惠券</div>";
-        else {
-            couponDiv.innerHTML = coupons.map(c => `<div class="order-item coupon-item">${c.name} 减${c.value}元 ${c.used ? '(已使用)' : c.expireTime < Date.now() ? '(已过期)' : `(满${c.minAmount}元可用)`}</div>`).join('');
-        }
-    }
-    
-    document.getElementById('showQrBtn')?.addEventListener('click', () => { document.getElementById('qrcodeArea').style.display = 'block'; });
+    document.getElementById('showQrBtn')?.addEventListener('click', () => { alert("演示模式：请自行上传支付截图"); });
     document.getElementById('submitRechargeBtn')?.addEventListener('click', () => {
-        let amount = document.getElementById('rechargeAmount').value, proof = document.getElementById('rechargeProof').value;
-        if (!proof) { alert("请上传付款截图链接"); return; }
+        let amount = document.getElementById('rechargeAmount').value;
+        let proof = document.getElementById('rechargeProof').value;
+        if (!proof) { alert("请提供付款截图链接"); return; }
         let reqs = getRechargeReqs();
-        reqs.push({ id: Date.now(), userId: u.uid, amount: parseInt(amount), proof, status: 'pending', type: 'user' });
+        reqs.push({ id: Date.now(), userId: u.uid, amount: parseInt(amount), proof, status: 'pending' });
         setRechargeReqs(reqs);
         alert("充值申请已提交");
-        document.getElementById('rechargeProof').value = '';
-        document.getElementById('qrcodeArea').style.display = 'none';
         renderApp();
     });
     document.getElementById('logoutBtn')?.addEventListener('click', () => { localStorage.removeItem('club_session'); renderApp(); });
     document.getElementById('withdrawBtn')?.addEventListener('click', () => {
-        let minAmt = settings.minWithdrawUser || 20;
-        let amt = prompt(`提现金额（最低${minAmt}元）`), acc = prompt("支付宝账号");
-        if (amt && acc && parseInt(amt) >= minAmt) {
+        let amt = prompt(`提现金额（最低${settings.minWithdrawUser||20}元）`), acc = prompt("支付宝账号");
+        if (amt && acc && parseInt(amt) >= (settings.minWithdrawUser||20)) {
             let reqs = getWithdrawReqs();
-            reqs.push({ id: Date.now(), userId: u.uid, amount: parseInt(amt), account: acc, status: 'pending', type: 'user' });
+            reqs.push({ id: Date.now(), userId: u.uid, amount: parseInt(amt), account: acc, status: 'pending' });
             setWithdrawReqs(reqs);
             alert("提现申请已提交");
-        } else alert(`最低提现金额${minAmt}元`);
+        } else alert("金额过低");
     });
     
-    // 实时更新市场价
     let gameSelect = document.getElementById('orderGame');
     let descInput = document.getElementById('orderDesc');
     let marketSpan = document.getElementById('marketPrice');
-    function updateMarketPrice() {
-        let game = gameSelect?.value || '和平精英';
-        let desc = descInput?.value || '';
-        let price = getMarketPrice(game, desc);
-        if (marketSpan) marketSpan.innerText = price;
+    function updatePrice() {
+        let price = getMarketPrice(gameSelect.value, descInput.value);
+        marketSpan.innerText = price;
     }
-    gameSelect?.addEventListener('change', updateMarketPrice);
-    descInput?.addEventListener('input', updateMarketPrice);
-    updateMarketPrice();
+    gameSelect.addEventListener('change', updatePrice);
+    descInput.addEventListener('input', updatePrice);
+    updatePrice();
     
-    // 发布订单
     document.getElementById('publishBtn')?.addEventListener('click', () => {
-        let game = gameSelect.value;
-        let desc = descInput.value;
+        let game = gameSelect.value, desc = descInput.value;
         let targetVal = document.getElementById('targetGamer').value;
         let marketPrice = getMarketPrice(game, desc);
         let couponId = document.getElementById('couponSelect').value;
         let finalPrice = marketPrice;
-        let usedCoupon = null;
-        
         if (couponId) {
-            let coupon = u.coupons.find(c => c.id == couponId && !c.used && c.expireTime > Date.now());
-            if (coupon && marketPrice >= coupon.minAmount) {
-                finalPrice = marketPrice - coupon.value;
-                usedCoupon = coupon;
-            } else if (coupon) {
-                alert(`优惠券需要满${coupon.minAmount}元才能使用`);
-                return;
-            }
+            let coupon = u.coupons.find(c => c.id == couponId);
+            if (coupon && marketPrice >= coupon.minAmount) finalPrice -= coupon.value;
+            else if (coupon) { alert(`优惠券需满${coupon.minAmount}元`); return; }
         }
-        
-        if (!game || !desc) { alert("请完整填写"); return; }
-        if (finalPrice <= 0) { alert("价格异常"); return; }
-        
+        if (!game || !desc) { alert("请填写完整"); return; }
         let targetGamerId = null, targetGamerName = null;
         if (targetVal) { let parts = targetVal.split('|'); targetGamerId = parts[0]; targetGamerName = parts[1]; }
-        
         let ordersArr = getOrders();
-        let newOrder = {
-            oid: 'o' + Date.now(), userId: u.uid, userName: u.username,
-            game, description: desc, originalPrice: marketPrice, price: finalPrice,
-            couponId: usedCoupon ? usedCoupon.id : null, couponValue: usedCoupon ? usedCoupon.value : 0,
-            status: targetGamerId ? 'waiting_assign' : 'waiting',
-            gamerId: targetGamerId, gamerName: targetGamerName,
-            messages: [], createTime: Date.now()
-        };
-        ordersArr.push(newOrder);
+        ordersArr.push({ oid: 'o'+Date.now(), userId: u.uid, userName: u.username, game, description: desc, originalPrice: marketPrice, price: finalPrice, status: targetGamerId ? 'waiting_assign' : 'waiting', gamerId: targetGamerId, gamerName: targetGamerName, messages: [] });
         setOrders(ordersArr);
-        
-        // 标记优惠券已使用
-        if (usedCoupon) {
-            let users = getUsers();
-            let user = users.find(x => x.uid === u.uid);
-            let idx = user.coupons.findIndex(c => c.id == usedCoupon.id);
-            if (idx !== -1) user.coupons[idx].used = true;
-            setUsers(users);
-        }
-        
-        alert(targetGamerId ? `已向 ${targetGamerName} 发起点单，优惠后价格 ${finalPrice} 元` : `订单已发布，市场价 ${marketPrice} 元，优惠后 ${finalPrice} 元`);
+        if (couponId) { let idx = u.coupons.findIndex(c => c.id == couponId); if(idx!==-1) u.coupons[idx].used=true; setUsers(getUsers()); }
+        alert(`订单已发布！市场价 ${marketPrice} 元，实付 ${finalPrice} 元`);
         renderApp();
     });
     
-    // 我的订单（含优惠券显示）
     let orderDiv = document.getElementById('myOrders');
     if (orderDiv) {
-        if (orders.length === 0) orderDiv.innerHTML = "<div>暂无订单</div>";
-        else {
-            orderDiv.innerHTML = orders.map(o => `
-                <div class="order-item">
-                    <b>${o.game}</b> | 原价 ¥${o.originalPrice} ${o.couponValue ? `<span style="color:#f59e0b;">(优惠券 -${o.couponValue}元)</span>` : ''} | 实付 ¥${o.price}<br>
-                    需求：${o.description}<br>状态：${o.status}<br>打手：${o.gamerName || '未指定'}<br>
-                    <div class="chat-box" id="chat-${o.oid}">${(o.messages || []).map(m => `<div class="chat-msg ${m.from === 'user' ? 'user' : ''}">${m.from === 'user' ? '我' : o.gamerName}：${m.content}</div>`).join('')}</div>
-                    <div class="flex"><input id="msgInput-${o.oid}" placeholder="发送消息..."><button class="sendMsgBtn" data-oid="${o.oid}">发送</button></div>
-                    ${o.status === 'accepted' ? `<button class="startOrderBtn" data-oid="${o.oid}">✅ 已发送ID，开始打</button>` : ''}
-                    ${o.status === 'in_progress' ? `<button class="completeOrderBtn" data-oid="${o.oid}">✅ 确认完成</button>` : ''}
-                    ${(o.status === 'waiting' || o.status === 'waiting_assign') ? `<button class="cancelOrderBtn" data-oid="${o.oid}">❌ 取消订单</button>` : ''}
-                </div>
-            `).join('');
-            // 发送消息、开始、完成、取消逻辑（与之前相同）
-            document.querySelectorAll('.sendMsgBtn').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    let oid = btn.dataset.oid, input = document.getElementById(`msgInput-${oid}`), msg = input.value.trim();
-                    if (!msg) return;
-                    let ordersArr = getOrders(), ord = ordersArr.find(x => x.oid === oid);
-                    if (ord) { ord.messages = ord.messages || []; ord.messages.push({ from: 'user', content: msg, time: Date.now() }); setOrders(ordersArr); input.value = ''; renderApp(); }
-                });
+        orderDiv.innerHTML = orders.map(o => `<div class="order-item"><b>${o.game}</b> | 原价 ${o.originalPrice} 实付 ${o.price}<br>需求：${o.description}<br>状态：${o.status}<br><div class="chat-box" id="chat-${o.oid}">${(o.messages || []).map(m => `<div class="chat-msg ${m.from === 'user' ? 'user' : ''}">${m.from === 'user' ? '我' : o.gamerName}：${m.content}</div>`).join('')}</div><div class="flex"><input id="msgInput-${o.oid}" placeholder="回复..."><button class="sendMsgBtn" data-oid="${o.oid}">发送</button></div></div>`).join('');
+        document.querySelectorAll('.sendMsgBtn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                let oid = btn.dataset.oid, input = document.getElementById(`msgInput-${oid}`), msg = input.value.trim();
+                if(!msg) return;
+                let ordersArr = getOrders(), ord = ordersArr.find(x=>x.oid===oid);
+                if(ord) { ord.messages = ord.messages || []; ord.messages.push({ from: 'user', content: msg }); setOrders(ordersArr); input.value=''; renderApp(); }
             });
-            document.querySelectorAll('.startOrderBtn').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    let oid = btn.dataset.oid, ordersArr = getOrders(), ord = ordersArr.find(x => x.oid === oid);
-                    if (ord && ord.status === 'accepted') { ord.status = 'in_progress'; setOrders(ordersArr); alert("已通知打手开始"); renderApp(); }
-                });
-            });
-            document.querySelectorAll('.completeOrderBtn').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    let oid = btn.dataset.oid, ordersArr = getOrders(), ord = ordersArr.find(x => x.oid === oid);
-                    if (ord && ord.status === 'in_progress') {
-                        let usersArr = getUsers(), player = usersArr.find(uu => uu.uid === ord.userId);
-                        if (player && player.balance >= ord.price) {
-                            let settings = getSettings();
-                            let fee = Math.floor(ord.price * (settings.platformFee || 10) / 100);
-                            let gamerEarn = ord.price - fee;
-                            player.balance -= ord.price;
-                            setUsers(usersArr);
-                            let gamersArr = getGamers(), gamer = gamersArr.find(g => g.gid === ord.gamerId);
-                            if (gamer) { gamer.balance += gamerEarn; setGamers(gamersArr); }
-                            ord.status = 'completed';
-                            setOrders(ordersArr);
-                            alert(`订单完成！平台抽成${fee}元，打手获得${gamerEarn}元`);
-                            renderApp();
-                        } else alert("余额不足");
-                    }
-                });
-            });
-            document.querySelectorAll('.cancelOrderBtn').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    let oid = btn.dataset.oid, ordersArr = getOrders(), ord = ordersArr.find(x => x.oid === oid);
-                    if (ord && (ord.status === 'waiting' || ord.status === 'waiting_assign')) { ord.status = 'cancelled'; setOrders(ordersArr); alert("订单已取消"); renderApp(); }
-                });
-            });
-        }
+        });
     }
-    
-    // 装备列表
-    let equipDiv = document.getElementById('equipList');
-    if (equipDiv) {
-        if (equipments.length === 0) equipDiv.innerHTML = "<div>暂无装备</div>";
-        else {
-            equipDiv.innerHTML = equipments.map(e => `<div class="equip-item"><b>${e.title}</b> ¥${e.price}<br><img src="${e.imgUrl}" style="max-width:80px; border-radius:8px;"><br>卖家：${e.sellerName}<br><button class="buyEquip" data-eid="${e.eid}" data-price="${e.price}" data-seller="${e.sellerId}">购买</button></div>`).join('');
-            document.querySelectorAll('.buyEquip').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    let eid = btn.dataset.eid, price = parseInt(btn.dataset.price), sellerId = btn.dataset.seller;
-                    if (currentUser.balance >= price) {
-                        let users = getUsers(), buyer = users.find(us => us.uid === currentUser.uid), seller = users.find(us => us.uid === sellerId);
-                        if (buyer && seller) { buyer.balance -= price; seller.balance += price; setUsers(users); setEquipment(getEquipment().filter(eq => eq.eid !== eid)); alert("购买成功"); renderApp(); }
-                        else alert("卖家不存在");
-                    } else alert("余额不足");
-                });
-            });
-        }
-    }
-    
-    // 投诉
-    let completedOrders = orders.filter(o => o.status === 'completed');
-    let selectEl = document.getElementById('complaintOrder');
-    if (selectEl) selectEl.innerHTML = '<option value="">-- 选择订单 --</option>' + completedOrders.map(o => `<option value="${o.oid}">${o.game} - ¥${o.price}</option>`).join('');
-    document.getElementById('submitComplaintBtn')?.addEventListener('click', () => {
-        let oid = document.getElementById('complaintOrder').value, reason = document.getElementById('complaintReason').value;
-        if (!oid || !reason) { alert("请选择订单并填写原因"); return; }
-        let order = getOrders().find(o => o.oid === oid);
-        if (!order) return;
-        let comps = getComplaints();
-        comps.push({ id: Date.now(), oid, userId: currentUser.uid, userName: currentUser.username, gamerId: order.gamerId, gamerName: order.gamerName, reason, status: 'pending' });
-        setComplaints(comps);
-        alert("投诉已提交");
-        document.getElementById('complaintReason').value = '';
-        renderApp();
-    });
-    let complaintsDiv = document.getElementById('myComplaints');
-    if (complaintsDiv) { let myc = getComplaints().filter(c => c.userId === currentUser.uid); complaintsDiv.innerHTML = myc.length ? myc.map(c => `<div class="order-item">订单${c.oid?.slice(-6)} 打手：${c.gamerName}<br>原因：${c.reason}<br>状态：${c.status === 'pending' ? '处理中' : '已处理'}</div>`).join('') : "<div>暂无投诉</div>"; }
 }
 renderApp();
 </script>
