@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>龙傲天俱乐部 · 管理后台</title>
+    <style>
+        * { box-sizing: border-box; }
+        body { background: #f1f5f9; margin: 0; padding: 15px; font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; color: #0f172a; }
+        .container { max-width: 1400px; margin: 0 auto; }
+        .card { background: white; border-radius: 24px; padding: 20px; margin-bottom: 20px; border: 1px solid #e2e8f0; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 20px; }
+        h2, h3 { margin: 0 0 16px 0; border-left: 4px solid #f59e0b; padding-left: 12px; }
+        input, select, textarea, button { width: 100%; padding: 10px; margin: 6px 0; border-radius: 40px; border: 1px solid #cbd5e1; background: white; font-size: 14px; }
+        button { background: #f59e0b; color: white; font-weight: bold; border: none; cursor: pointer; }
+        .danger-btn { background: #ef4444; }
+        .flex { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th, td { padding: 10px; text-align: left; border-bottom: 1px solid #e2e8f0; }
+        th { background: #f8fafc; }
+        .badge { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: bold; }
+        .log-list { max-height: 300px; overflow-y: auto; background: #f8fafc; padding: 10px; border-radius: 16px; font-size: 12px; }
+        .log-item { padding: 6px 0; border-bottom: 1px solid #e2e8f0; font-family: monospace; }
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); justify-content: center; align-items: center; z-index: 1000; }
+        .modal-content { background: white; max-width: 500px; width: 90%; border-radius: 32px; padding: 24px; }
+        canvas { max-height: 300px; width: 100%; }
+    </style>
+</head>
+<body>
+<div class="container" id="app"></div>
+<script>
+// 初始化
+if (!localStorage.getItem('club_users')) localStorage.setItem('club_users', JSON.stringify([]));
+if (!localStorage.getItem('club_gamers')) localStorage.setItem('club_gamers', JSON.stringify([]));
+if (!localStorage.getItem('club_orders')) localStorage.setItem('club_orders', JSON.stringify([]));
+if (!localStorage.getItem('club_equipment')) localStorage.setItem('club_equipment', JSON.stringify([]));
+if (!localStorage.getItem('club_admin')) localStorage.setItem('club_admin', JSON.stringify({ loginId: 'admin', pwd: 'admin123' }));
+if (!localStorage.getItem('club_recharge_reqs')) localStorage.setItem('club_recharge_reqs', JSON.stringify([]));
+if (!localStorage.getItem('club_withdraw_reqs')) localStorage.setItem('club_withdraw_reqs', JSON.stringify([]));
+if (!localStorage.getItem('club_complaints')) localStorage.setItem('club_complaints', JSON.stringify([]));
+if (!localStorage.getItem('club_announcements')) localStorage.setItem('club_announcements', JSON.stringify({ user: '', gamer: '', ad: { type: 'text', content: '欢迎光临', link: '' } }));
+if (!localStorage.getItem('club_settings')) localStorage.setItem('club_settings', JSON.stringify({ platformFee: 10, autoCancelHours: 24, autoConfirmHours: 72, minWithdrawUser: 20, minWithdrawGamer: 25, antiBrushLimit: 5, antiBrushMinutes: 10 }));
+if (!localStorage.getItem('club_blacklist_ip')) localStorage.setItem('club_blacklist_ip', JSON.stringify([]));
+if (!localStorage.getItem('club_logs')) localStorage.setItem('club_logs', JSON.stringify([]));
+if (!localStorage.getItem('club_finance_logs')) localStorage.setItem('club_finance_logs', JSON.stringify([]));
+if (!localStorage.getItem('club_invite_tree')) localStorage.setItem('club_invite_tree', JSON.stringify({}));
+
+function addLog(type, userId, action, detail) { let logs = JSON.parse(localStorage.getItem('club_logs') || '[]'); logs.unshift({ id: Date.now(), type, userId, action, detail, time: new Date().toLocaleString() }); if (logs.length > 1000) logs.pop(); localStorage.setItem('club_logs', JSON.stringify(logs)); }
+function addFinanceLog(userId, type, amount, balance, remark) { let logs = JSON.parse(localStorage.getItem('club_finance_logs') || '[]'); logs.unshift({ id: Date.now(), userId, type, amount, balance, remark, time: new Date().toLocaleString() }); if (logs.length > 1000) logs.pop(); localStorage.setItem('club_finance_logs', JSON.stringify(logs)); }
+function getAgeByIdCard(idCard) { if (!idCard || idCard.length !== 18) return null; let birth = idCard.substring(6,14); let year = parseInt(birth.substring(0,4)); let month = parseInt(birth.substring(4,6)); let day = parseInt(birth.substring(6,8)); let today = new Date(); let age = today.getFullYear() - year; if (today.getMonth()+1 < month || (today.getMonth()+1 === month && today.getDate() < day)) age--; return age; }
+function checkIdCard(idCard) { return /^[1-9]\d{5}(18|19|20)\d{2}(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])\d{3}[\dX]$/i.test(idCard); }
+function encryptPwd(pwd) { return btoa(pwd); }
+
+let currentAdmin = null;
+function saveAdmin(user) { currentAdmin = user; localStorage.setItem('club_admin_session', JSON.stringify(user ? { uid: user.uid } : null)); render(); }
+function getSession() { let raw = localStorage.getItem('club_admin_session'); if (!raw) return null; let sess = JSON.parse(raw); if (!sess) return null; let admin = JSON.parse(localStorage.getItem('club_admin')); if (sess.uid === 'admin') return { uid: 'admin', role: 'admin' }; return null; }
+function changeUserBalance(uid, amount, remark) { let users = JSON.parse(localStorage.getItem('club_users') || '[]'); let u = users.find(x => x.uid === uid); if (u) { u.balance += amount; localStorage.setItem('club_users', JSON.stringify(users)); addFinanceLog(uid, 'admin_adjust', amount, u.balance, remark); addLog('finance', uid, '余额调整', `${remark}：${amount>0?'+':''}${amount}`); } }
+function changeGamerBalance(gid, amount, remark) { let gamers = JSON.parse(localStorage.getItem('club_gamers') || '[]'); let g = gamers.find(x => x.gid === gid); if (g) { g.balance += amount; localStorage.setItem('club_gamers', JSON.stringify(gamers)); addFinanceLog(gid, 'admin_adjust', amount, g.balance, remark); addLog('finance', gid, '余额调整', `${remark}：${amount>0?'+':''}${amount}`); } }
+
+function render() {
+    let container = document.getElementById('app');
+    if (!container) return;
+    let sess = getSession();
+    if (!sess) {
+        container.innerHTML = `<div class="card" style="max-width:400px;margin:auto;"><h2>管理后台登录</h2><input id="adminUser" placeholder="账号"><input id="adminPwd" type="password" placeholder="密码"><button id="loginBtn">登录</button><div class="flex" style="justify-content:center;margin-top:12px;"><span class="badge" style="background:#e2e8f0;">demo: admin / admin123</span></div></div>`;
+        document.getElementById('loginBtn')?.addEventListener('click', () => { let user = document.getElementById('adminUser').value, pwd = document.getElementById('adminPwd').value; let admin = JSON.parse(localStorage.getItem('club_admin')); if (user === admin.loginId && pwd === admin.pwd) { saveAdmin({ uid: 'admin' }); addLog('auth', 'admin', '登录', '管理员登录后台'); } else alert("账号或密码错误"); });
+        return;
+    }
+    let users = JSON.parse(localStorage.getItem('club_users') || '[]');
+    let gamers = JSON.parse(localStorage.getItem('club_gamers') || '[]');
+    let orders = JSON.parse(localStorage.getItem('club_orders') || '[]');
+    let equipments = JSON.parse(localStorage.getItem('club_equipment') || '[]');
+    let rechargeReqs = JSON.parse(localStorage.getItem('club_recharge_reqs') || '[]');
+    let withdrawReqs = JSON.parse(localStorage.getItem('club_withdraw_reqs') || '[]');
+    let complaints = JSON.parse(localStorage.getItem('club_complaints') || '[]');
+    let announcements = JSON.parse(localStorage.getItem('club_announcements') || '{}');
+    let settings = JSON.parse(localStorage.getItem('club_settings') || '{}');
+    let blacklistIp = JSON.parse(localStorage.getItem('club_blacklist_ip') || '[]');
+    let logs = JSON.parse(localStorage.getItem('club_logs') || '[]');
+    let financeLogs = JSON.parse(localStorage.getItem('club_finance_logs') || '[]');
+    
+    let totalBalance = users.reduce((s,u)=>s+u.balance,0) + gamers.reduce((s,g)=>s+g.balance,0);
+    let html = `<div class="grid">
+        <div class="card"><h2>📊 数据看板</h2><div>👥 玩家：${users.length} | 🔫 打手：${gamers.length}</div><div>📦 订单：${orders.length} | 💰 装备：${equipments.length}</div><div>💰 总余额：${totalBalance}元</div><div>⏳ 待审实名：${gamers.filter(g=>g.verifyStatus==='pending').length} | 📝 充值：${rechargeReqs.length} | 💸 提现：${withdrawReqs.length} | ⚠️ 投诉：${complaints.length}</div><canvas id="chart" style="max-height:200px;"></canvas></div>
+        <div class="card"><h3>⚙️ 系统设置</h3><label>平台抽成(%)</label><input id="fee" value="${settings.platformFee||10}" type="number"><label>超时取消(小时)</label><input id="cancelHours" value="${settings.autoCancelHours||24}" type="number"><label>超时确认(小时)</label><input id="confirmHours" value="${settings.autoConfirmHours||72}" type="number"><label>玩家最低提现(元)</label><input id="minUser" value="${settings.minWithdrawUser||20}" type="number"><label>打手最低提现(元)</label><input id="minGamer" value="${settings.minWithdrawGamer||25}" type="number"><button id="saveSettings">保存设置</button></div>
+        <div class="card"><h3>📢 公告/广告</h3><textarea id="userAnnounce" rows="2" placeholder="用户公告">${announcements.user||''}</textarea><button id="sendUserAnnounce">发送用户公告</button><textarea id="gamerAnnounce" rows="2" placeholder="打手公告">${announcements.gamer||''}</textarea><button id="sendGamerAnnounce">发送打手公告</button><label>广告类型</label><select id="adType"><option value="text" ${announcements.ad?.type==='text'?'selected':''}>文字广告</option><option value="image" ${announcements.ad?.type==='image'?'selected':''}>图片广告</option></select><input id="adContent" placeholder="广告内容(文字或图片链接)" value="${announcements.ad?.content||''}"><input id="adLink" placeholder="广告链接" value="${announcements.ad?.link||''}"><button id="saveAd">保存广告</button></div>
+        <div class="card"><h3>➕ 创建账号</h3><div class="flex"><input id="newUserName" placeholder="昵称"><input id="newUserLogin" placeholder="账号"><input id="newUserPwd" placeholder="密码"></div><button id="createUser">创建玩家</button><div class="flex"><input id="newGamerName" placeholder="昵称"><input id="newGamerLogin" placeholder="账号"><input id="newGamerPwd" placeholder="密码"></div><button id="createGamer">创建打手</button></div>
+        <div class="card"><h3>👥 玩家管理</h3><div id="userList" style="max-height:300px;overflow-y:auto;"></div></div>
+        <div class="card"><h3>🔫 打手管理(含实名审核)</h3><div id="gamerList" style="max-height:300px;overflow-y:auto;"></div></div>
+        <div class="card"><h3>💰 充值审核</h3><div id="rechargeList"></div></div>
+        <div class="card"><h3>💸 提现审核</h3><div id="withdrawList"></div></div>
+        <div class="card"><h3>⚠️ 投诉处理</h3><div id="complaintList"></div></div>
+        <div class="card"><h3>🌐 黑名单IP</h3><div class="flex"><input id="newIp" placeholder="IP地址"><button id="addIp">添加IP</button></div><div id="ipList"></div></div>
+        <div class="card"><h3>📜 操作日志</h3><div class="flex"><select id="logType"><option value="">全部</option><option value="auth">登录</option><option value="order">订单</option><option value="finance">财务</option></select><button id="searchLogs">筛选</button></div><div id="logList" class="log-list"></div></div>
+    </div>`;
+    container.innerHTML = html;
+    
+    document.getElementById('saveSettings')?.addEventListener('click', () => { let newSettings = { platformFee: parseInt(document.getElementById('fee').value), autoCancelHours: parseInt(document.getElementById('cancelHours').value), autoConfirmHours: parseInt(document.getElementById('confirmHours').value), minWithdrawUser: parseInt(document.getElementById('minUser').value), minWithdrawGamer: parseInt(document.getElementById('minGamer').value), antiBrushLimit: 5, antiBrushMinutes: 10 }; localStorage.setItem('club_settings', JSON.stringify(newSettings)); alert("设置已保存"); });
+    document.getElementById('sendUserAnnounce')?.addEventListener('click', () => { let ann = JSON.parse(localStorage.getItem('club_announcements') || '{}'); ann.user = document.getElementById('userAnnounce').value; localStorage.setItem('club_announcements', JSON.stringify(ann)); alert("用户公告已发送"); });
+    document.getElementById('sendGamerAnnounce')?.addEventListener('click', () => { let ann = JSON.parse(localStorage.getItem('club_announcements') || '{}'); ann.gamer = document.getElementById('gamerAnnounce').value; localStorage.setItem('club_announcements', JSON.stringify(ann)); alert("打手公告已发送"); });
+    document.getElementById('saveAd')?.addEventListener('click', () => { let ann = JSON.parse(localStorage.getItem('club_announcements') || '{}'); ann.ad = { type: document.getElementById('adType').value, content: document.getElementById('adContent').value, link: document.getElementById('adLink').value }; localStorage.setItem('club_announcements', JSON.stringify(ann)); alert("广告已保存"); });
+    document.getElementById('createUser')?.addEventListener('click', () => { let name=document.getElementById('newUserName').value, login=document.getElementById('newUserLogin').value, pwd=document.getElementById('newUserPwd').value; if(!name||!login||!pwd) return; let arr = JSON.parse(localStorage.getItem('club_users')||'[]'); if(arr.find(u=>u.loginId===login)) { alert("账号已存在"); return; } arr.push({ uid:'u'+Date.now(), username:name, loginId:login, pwd:encryptPwd(pwd), balance:0, level:'user', banned:false }); localStorage.setItem('club_users',JSON.stringify(arr)); alert("创建成功"); render(); });
+    document.getElementById('createGamer')?.addEventListener('click', () => { let name=document.getElementById('newGamerName').value, login=document.getElementById('newGamerLogin').value, pwd=document.getElementById('newGamerPwd').value; if(!name||!login||!pwd) return; let arr = JSON.parse(localStorage.getItem('club_gamers')||'[]'); if(arr.find(g=>g.loginId===login)) { alert("账号已存在"); return; } arr.push({ gid:'g'+Date.now(), username:name, loginId:login, pwd:encryptPwd(pwd), skills:[], balance:0, level:'junior_gamer', banned:false, approved:true, verifyStatus:'not', totalOrders:0 }); localStorage.setItem('club_gamers',JSON.stringify(arr)); alert("创建成功"); render(); });
+    
+    // 玩家列表
+    let userDiv = document.getElementById('userList');
+    userDiv.innerHTML = users.map(u => `<div class="flex" style="justify-content:space-between;"><span>${u.username} | 余额${u.balance} | ${u.level}</span><div><button class="banUser" data-uid="${u.uid}">${u.banned?'解封':'封禁'}</button><button class="addBalance" data-uid="${u.uid}">加余额</button></div></div>`).join('');
+    document.querySelectorAll('.banUser').forEach(btn => { btn.addEventListener('click', () => { let uid = btn.dataset.uid; let arr = JSON.parse(localStorage.getItem('club_users')||'[]'); let u = arr.find(x=>x.uid===uid); if(u) u.banned = !u.banned; localStorage.setItem('club_users',JSON.stringify(arr)); render(); }); });
+    document.querySelectorAll('.addBalance').forEach(btn => { btn.addEventListener('click', () => { let uid = btn.dataset.uid, amt = prompt("增加余额"); if(amt) changeUserBalance(uid, parseInt(amt), '管理员手动加余额'); render(); }); });
+    
+    // 打手列表
+    let gamerDiv = document.getElementById('gamerList');
+    gamerDiv.innerHTML = gamers.map(g => `<div class="flex" style="justify-content:space-between;"><span>${g.username} | 余额${g.balance} | ${g.level} | 实名:${g.verifyStatus||'未认证'}</span><div>${g.verifyStatus === 'pending' ? `<button class="approveVerify" data-gid="${g.gid}">✅通过</button><button class="rejectVerify" data-gid="${g.gid}">❌拒绝</button>` : ''}<button class="banGamer" data-gid="${g.gid}">${g.banned?'解封':'封禁'}</button><button class="addGamerBalance" data-gid="${g.gid}">加余额</button></div></div>`).join('');
+    document.querySelectorAll('.approveVerify').forEach(btn => { btn.addEventListener('click', () => { let gid = btn.dataset.gid; let arr = JSON.parse(localStorage.getItem('club_gamers')||'[]'); let g = arr.find(x=>x.gid===gid); if(g) { g.verifyStatus='verified'; addLog('auth', gid, '实名审核', `通过 ${g.username} 实名`); localStorage.setItem('club_gamers',JSON.stringify(arr)); render(); } }); });
+    document.querySelectorAll('.rejectVerify').forEach(btn => { btn.addEventListener('click', () => { let gid = btn.dataset.gid; let arr = JSON.parse(localStorage.getItem('club_gamers')||'[]'); let g = arr.find(x=>x.gid===gid); if(g) { g.verifyStatus='rejected'; addLog('auth', gid, '实名审核', `拒绝 ${g.username} 实名`); localStorage.setItem('club_gamers',JSON.stringify(arr)); render(); } }); });
+    document.querySelectorAll('.banGamer').forEach(btn => { btn.addEventListener('click', () => { let gid = btn.dataset.gid; let arr = JSON.parse(localStorage.getItem('club_gamers')||'[]'); let g = arr.find(x=>x.gid===gid); if(g) g.banned = !g.banned; localStorage.setItem('club_gamers',JSON.stringify(arr)); render(); }); });
+    document.querySelectorAll('.addGamerBalance').forEach(btn => { btn.addEventListener('click', () => { let gid = btn.dataset.gid, amt = prompt("增加余额"); if(amt) changeGamerBalance(gid, parseInt(amt), '管理员手动加余额'); render(); }); });
+    
+    // 充值
+    let rechargeDiv = document.getElementById('rechargeList');
+    rechargeDiv.innerHTML = rechargeReqs.map(r => `<div>用户${r.userId} 金额${r.amount}<button class="confirmRecharge" data-id="${r.id}">确认</button><button class="rejectRecharge" data-id="${r.id}">驳回</button></div>`).join('');
+    document.querySelectorAll('.confirmRecharge').forEach(btn => { btn.addEventListener('click', () => { let rid = parseInt(btn.dataset.id); let reqs = JSON.parse(localStorage.getItem('club_recharge_reqs')||'[]'); let req = reqs.find(x=>x.id===rid); if(req) { changeUserBalance(req.userId, req.amount, '充值到账'); addLog('finance', req.userId, '充值', `充值 ${req.amount} 元`); localStorage.setItem('club_recharge_reqs', JSON.stringify(reqs.filter(x=>x.id!==rid))); render(); } }); });
+    document.querySelectorAll('.rejectRecharge').forEach(btn => { btn.addEventListener('click', () => { let rid = parseInt(btn.dataset.id); let reqs = JSON.parse(localStorage.getItem('club_recharge_reqs')||'[]'); localStorage.setItem('club_recharge_reqs', JSON.stringify(reqs.filter(x=>x.id!==rid))); render(); }); });
+    
+    // 提现
+    let withdrawDiv = document.getElementById('withdrawList');
+    withdrawDiv.innerHTML = withdrawReqs.map(w => `<div>用户${w.userId} 金额${w.amount} 账号${w.account}<button class="confirmWithdraw" data-id="${w.id}">确认打款</button><button class="rejectWithdraw" data-id="${w.id}">驳回</button></div>`).join('');
+    document.querySelectorAll('.confirmWithdraw').forEach(btn => { btn.addEventListener('click', () => { let wid = parseInt(btn.dataset.id); let reqs = JSON.parse(localStorage.getItem('club_withdraw_reqs')||'[]'); addLog('finance', 'admin', '提现打款', `打款金额 ${reqs.find(x=>x.id===wid)?.amount}`); localStorage.setItem('club_withdraw_reqs', JSON.stringify(reqs.filter(x=>x.id!==wid))); alert("已确认打款"); render(); }); });
+    document.querySelectorAll('.rejectWithdraw').forEach(btn => { btn.addEventListener('click', () => { let wid = parseInt(btn.dataset.id); let reqs = JSON.parse(localStorage.getItem('club_withdraw_reqs')||'[]'); localStorage.setItem('club_withdraw_reqs', JSON.stringify(reqs.filter(x=>x.id!==wid))); render(); }); });
+    
+    // 投诉
+    let complaintDiv = document.getElementById('complaintList');
+    complaintDiv.innerHTML = complaints.map(c => `<div>订单${c.oid} 玩家${c.userName} 投诉${c.gamerName}<br>原因：${c.reason}<button class="resolveComplaint" data-id="${c.id}">标记处理</button></div>`).join('');
+    document.querySelectorAll('.resolveComplaint').forEach(btn => { btn.addEventListener('click', () => { let cid = parseInt(btn.dataset.id); let arr = JSON.parse(localStorage.getItem('club_complaints')||'[]'); localStorage.setItem('club_complaints', JSON.stringify(arr.filter(x=>x.id!==cid))); render(); }); });
+    
+    // IP黑名单
+    let ipDiv = document.getElementById('ipList');
+    ipDiv.innerHTML = blacklistIp.map(ip => `<div>${ip}<button class="delIp" data-ip="${ip}">删除</button></div>`).join('');
+    document.getElementById('addIp')?.addEventListener('click', () => { let ip = document.getElementById('newIp').value; if(ip) { let arr = JSON.parse(localStorage.getItem('club_blacklist_ip')||'[]'); arr.push(ip); localStorage.setItem('club_blacklist_ip', JSON.stringify(arr)); render(); } });
+    document.querySelectorAll('.delIp').forEach(btn => { btn.addEventListener('click', () => { let ip = btn.dataset.ip; let arr = JSON.parse(localStorage.getItem('club_blacklist_ip')||'[]'); localStorage.setItem('club_blacklist_ip', JSON.stringify(arr.filter(x=>x!==ip))); render(); }); });
+    
+    // 日志
+    let logDiv = document.getElementById('logList');
+    let filterType = document.getElementById('logType')?.value || '';
+    let filtered = filterType ? logs.filter(l=>l.type===filterType) : logs;
+    logDiv.innerHTML = filtered.slice(0,100).map(l => `<div class="log-item">[${l.time}] [${l.type}] ${l.userId} ${l.action}：${l.detail}</div>`).join('');
+    document.getElementById('searchLogs')?.addEventListener('click', () => render());
+    
+    // 简单图表
+    let ctx = document.getElementById('chart')?.getContext('2d');
+    if(ctx && typeof Chart !== 'undefined') new Chart(ctx, { type:'line', data:{ labels:['订单','用户','打手'], datasets:[{ label:'数量', data:[orders.length, users.length, gamers.length], borderColor:'#f59e0b' }] } });
+}
+render();
+</script>
+</body>
+</html>
