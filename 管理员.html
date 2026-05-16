@@ -3,56 +3,69 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>龙傲天俱乐部 · 管理后台</title>
+    <title>龙傲天俱乐部 · 超级管理后台</title>
     <style>
         * { box-sizing: border-box; }
         body { background: #f1f5f9; margin: 0; padding: 15px; font-family: system-ui, sans-serif; color: #0f172a; }
         .container { max-width: 1400px; margin: 0 auto; }
         .card { background: white; border-radius: 24px; padding: 20px; margin-bottom: 20px; border: 1px solid #e2e8f0; }
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 20px; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 20px; }
         h2, h3 { margin: 0 0 16px 0; border-left: 4px solid #f59e0b; padding-left: 12px; }
         input, select, textarea, button { width: 100%; padding: 10px; margin: 6px 0; border-radius: 40px; border: 1px solid #cbd5e1; background: white; font-size: 14px; }
         button { background: #f59e0b; color: white; font-weight: bold; border: none; cursor: pointer; }
+        .danger-btn { background: #ef4444; }
         .flex { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
-        .price-item { background: #f8fafc; border-radius: 16px; padding: 10px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th, td { padding: 10px; text-align: left; border-bottom: 1px solid #e2e8f0; }
+        th { background: #f8fafc; }
+        .badge { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: bold; }
+        .log-list { max-height: 300px; overflow-y: auto; background: #f8fafc; padding: 10px; border-radius: 16px; font-size: 12px; }
+        .log-item { padding: 6px 0; border-bottom: 1px solid #e2e8f0; font-family: monospace; }
+        .order-item { background: #f8fafc; border-radius: 16px; padding: 10px; margin-bottom: 8px; border-left: 3px solid #f59e0b; }
+        canvas { max-height: 250px; width: 100%; }
     </style>
 </head>
 <body>
 <div class="container" id="app"></div>
 <script>
-// ---------- 初始化数据 ----------
+// ---------- 完整初始化数据 ----------
 if (!localStorage.getItem('club_users')) {
     localStorage.setItem('club_users', JSON.stringify([
-        { uid: 'u1', username: '测试玩家', loginId: 'player', pwd: '111', balance: 500, level: 'user', banned: false, coupons: [] }
+        { uid: 'u1', username: '测试玩家', loginId: 'player', pwd: btoa('111'), balance: 500, level: 'vip', banned: false, frozenBalance: 0, inviter: null, regTime: Date.now() }
     ]));
 }
 if (!localStorage.getItem('club_gamers')) {
     localStorage.setItem('club_gamers', JSON.stringify([
-        { gid: 'g1', username: '墨渊', loginId: 'moyuan', pwd: '123456', skills: [], balance: 0, level: 'junior_gamer', banned: false, approved: true, verifyStatus: 'verified', totalOrders: 0 }
+        { gid: 'g1', username: '墨渊', loginId: 'moyuan', pwd: btoa('123456'), skills: [], balance: 0, level: 'gold_gamer', banned: false, approved: true, verifyStatus: 'verified', realName: '墨渊', idCard: '********', totalOrders: 0, avgRating: 0, frozenBalance: 0 }
     ]));
 }
 if (!localStorage.getItem('club_orders')) localStorage.setItem('club_orders', JSON.stringify([]));
 if (!localStorage.getItem('club_equipment')) localStorage.setItem('club_equipment', JSON.stringify([]));
-if (!localStorage.getItem('club_admin')) localStorage.setItem('club_admin', JSON.stringify({ loginId: 'admin', pwd: 'admin123' }));
+if (!localStorage.getItem('club_admin')) localStorage.setItem('club_admin', JSON.stringify({ loginId: 'admin', pwd: btoa('admin123') }));
 if (!localStorage.getItem('club_recharge_reqs')) localStorage.setItem('club_recharge_reqs', JSON.stringify([]));
 if (!localStorage.getItem('club_withdraw_reqs')) localStorage.setItem('club_withdraw_reqs', JSON.stringify([]));
 if (!localStorage.getItem('club_complaints')) localStorage.setItem('club_complaints', JSON.stringify([]));
-if (!localStorage.getItem('club_announcements')) localStorage.setItem('club_announcements', JSON.stringify({ user: '', gamer: '', ad: { type: 'text', content: '欢迎光临', link: '' } }));
-if (!localStorage.getItem('club_settings')) localStorage.setItem('club_settings', JSON.stringify({ platformFee: 10, minWithdrawUser: 20, minWithdrawGamer: 25 }));
+if (!localStorage.getItem('club_announcements')) localStorage.setItem('club_announcements', JSON.stringify({ user: '', gamer: '', ad: { type: 'text', content: '欢迎光临龙傲天俱乐部', link: '' } }));
+if (!localStorage.getItem('club_settings')) localStorage.setItem('club_settings', JSON.stringify({ 
+    platformFee: 10, minWithdrawUser: 20, minWithdrawGamer: 25, 
+    autoCancelHours: 24, autoConfirmHours: 72, 
+    antiBrushLimit: 5, antiBrushMinutes: 10,
+    equipmentFee: 5
+}));
 if (!localStorage.getItem('club_blacklist_ip')) localStorage.setItem('club_blacklist_ip', JSON.stringify([]));
 if (!localStorage.getItem('club_logs')) localStorage.setItem('club_logs', JSON.stringify([]));
 if (!localStorage.getItem('club_finance_logs')) localStorage.setItem('club_finance_logs', JSON.stringify([]));
-if (!localStorage.getItem('club_festival_log')) localStorage.setItem('club_festival_log', JSON.stringify({}));
-// 初始化市场价格库（便宜版 + 无敌战神100）
-if (!localStorage.getItem('club_market_prices')) {
-    localStorage.setItem('club_market_prices', JSON.stringify({
-        base: { '和平精英': 20, '地铁逃生': 25, '百万撤离': 30, '千万撤离': 40, 'PUBG': 20, '三角洲行动': 25 },
-        keywords: { '无敌战神': 100, '战神': 60, '王牌': 20, '皇冠': 15, '星钻': 10, '热成像': 20, '六套': 25, '七套': 35, '八套': 45, '九套': 55, '十套': 70, '百万撤离': 30, '千万撤离': 40, '地铁': 15 }
-    }));
-}
+if (!localStorage.getItem('club_invite_tree')) localStorage.setItem('club_invite_tree', JSON.stringify({}));
+if (!localStorage.getItem('club_distribution_settings')) localStorage.setItem('club_distribution_settings', JSON.stringify({ level1: 10, level2: 5, level3: 3 }));
 
-function getMarketPrices() { return JSON.parse(localStorage.getItem('club_market_prices') || '{}'); }
-function setMarketPrices(v) { localStorage.setItem('club_market_prices', JSON.stringify(v)); }
+// 辅助函数
+function addLog(type, userId, action, detail) { let logs = JSON.parse(localStorage.getItem('club_logs') || '[]'); logs.unshift({ id: Date.now(), type, userId, action, detail, time: new Date().toLocaleString() }); if (logs.length > 2000) logs.pop(); localStorage.setItem('club_logs', JSON.stringify(logs)); }
+function addFinanceLog(userId, type, amount, balance, remark) { let logs = JSON.parse(localStorage.getItem('club_finance_logs') || '[]'); logs.unshift({ id: Date.now(), userId, type, amount, balance, remark, time: new Date().toLocaleString() }); if (logs.length > 2000) logs.pop(); localStorage.setItem('club_finance_logs', JSON.stringify(logs)); }
+function getAgeByIdCard(idCard) { if (!idCard || idCard.length !== 18) return null; let birth = idCard.substring(6,14); let year = parseInt(birth.substring(0,4)); let month = parseInt(birth.substring(4,6)); let day = parseInt(birth.substring(6,8)); let today = new Date(); let age = today.getFullYear() - year; if (today.getMonth()+1 < month || (today.getMonth()+1 === month && today.getDate() < day)) age--; return age; }
+function checkIdCard(idCard) { return /^[1-9]\d{5}(18|19|20)\d{2}(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])\d{3}[\dX]$/i.test(idCard); }
+function encryptPwd(pwd) { return btoa(pwd); }
+function decryptPwd(pwd) { try { return atob(pwd); } catch(e) { return pwd; } }
+
 function getUsers() { return JSON.parse(localStorage.getItem('club_users') || '[]'); }
 function setUsers(v) { localStorage.setItem('club_users', JSON.stringify(v)); }
 function getGamers() { return JSON.parse(localStorage.getItem('club_gamers') || '[]'); }
@@ -73,20 +86,23 @@ function getSettings() { return JSON.parse(localStorage.getItem('club_settings')
 function setSettings(v) { localStorage.setItem('club_settings', JSON.stringify(v)); }
 function getBlacklistIp() { return JSON.parse(localStorage.getItem('club_blacklist_ip') || '[]'); }
 function setBlacklistIp(v) { localStorage.setItem('club_blacklist_ip', JSON.stringify(v)); }
+function getInviteTree() { return JSON.parse(localStorage.getItem('club_invite_tree') || '{}'); }
+function setInviteTree(v) { localStorage.setItem('club_invite_tree', JSON.stringify(v)); }
+function getDistribSettings() { return JSON.parse(localStorage.getItem('club_distribution_settings') || '{}'); }
 
 let currentAdmin = null;
 function saveAdmin(user) { currentAdmin = user; localStorage.setItem('club_admin_session', JSON.stringify(user ? { uid: user.uid } : null)); render(); }
 function getSession() { let raw = localStorage.getItem('club_admin_session'); if (!raw) return null; let sess = JSON.parse(raw); if (!sess) return null; let admin = JSON.parse(localStorage.getItem('club_admin')); if (sess.uid === 'admin') return { uid: 'admin', role: 'admin' }; return null; }
-function changeUserBalance(uid, amount, remark) { let users = getUsers(); let u = users.find(x => x.uid === uid); if (u) { u.balance += amount; setUsers(users); } render(); }
-function changeGamerBalance(gid, amount, remark) { let gamers = getGamers(); let g = gamers.find(x => x.gid === gid); if (g) { g.balance += amount; setGamers(gamers); } render(); }
+function changeUserBalance(uid, amount, remark) { let users = getUsers(); let u = users.find(x => x.uid === uid); if (u) { u.balance += amount; setUsers(users); addFinanceLog(uid, 'admin_adjust', amount, u.balance, remark); addLog('finance', uid, '余额调整', `${remark}：${amount>0?'+':''}${amount}`); } render(); }
+function changeGamerBalance(gid, amount, remark) { let gamers = getGamers(); let g = gamers.find(x => x.gid === gid); if (g) { g.balance += amount; setGamers(gamers); addFinanceLog(gid, 'admin_adjust', amount, g.balance, remark); addLog('finance', gid, '余额调整', `${remark}：${amount>0?'+':''}${amount}`); } render(); }
 
 function render() {
     let container = document.getElementById('app');
     if (!container) return;
     let sess = getSession();
     if (!sess) {
-        container.innerHTML = `<div class="card" style="max-width:400px;margin:auto;"><h2>👑 管理后台登录</h2><input id="adminUser" placeholder="账号" value="admin"><input id="adminPwd" type="password" placeholder="密码" value="admin123"><button id="loginBtn">登录</button></div>`;
-        document.getElementById('loginBtn')?.addEventListener('click', () => { let user = document.getElementById('adminUser').value, pwd = document.getElementById('adminPwd').value; let admin = JSON.parse(localStorage.getItem('club_admin')); if (user === admin.loginId && pwd === admin.pwd) { saveAdmin({ uid: 'admin' }); } else alert("账号或密码错误"); });
+        container.innerHTML = `<div class="card" style="max-width:400px;margin:auto;"><h2>👑 管理后台登录</h2><input id="adminUser" placeholder="账号" value="admin"><input id="adminPwd" type="password" placeholder="密码" value="admin123"><button id="loginBtn">登录</button><div class="flex" style="justify-content:center;margin-top:12px;"><span class="badge" style="background:#e2e8f0;">超级管理员</span></div></div>`;
+        document.getElementById('loginBtn')?.addEventListener('click', () => { let user = document.getElementById('adminUser').value, pwd = document.getElementById('adminPwd').value; let admin = JSON.parse(localStorage.getItem('club_admin')); if (user === admin.loginId && decryptPwd(admin.pwd) === pwd) { saveAdmin({ uid: 'admin' }); addLog('auth', 'admin', '登录', '管理员登录后台'); } else alert("账号或密码错误"); });
         return;
     }
     
@@ -100,84 +116,104 @@ function render() {
     let announcements = getAnnouncements();
     let settings = getSettings();
     let blacklistIp = getBlacklistIp();
-    let marketPrices = getMarketPrices();
+    let logs = JSON.parse(localStorage.getItem('club_logs') || '[]');
     let totalBalance = users.reduce((s,u)=>s+u.balance,0) + gamers.reduce((s,g)=>s+g.balance,0);
     
     let html = `
         <div class="grid">
-            <div class="card"><h2>📊 数据看板</h2><div>👥 玩家：${users.length} | 🔫 打手：${gamers.length}</div><div>📦 订单：${orders.length} | 💰 总余额：${totalBalance}元</div></div>
-            <div class="card"><h3>⚙️ 系统设置</h3><label>平台抽成(%)</label><input id="fee" value="${settings.platformFee||10}" type="number"><label>玩家最低提现(元)</label><input id="minUser" value="${settings.minWithdrawUser||20}" type="number"><label>打手最低提现(元)</label><input id="minGamer" value="${settings.minWithdrawGamer||25}" type="number"><button id="saveSettings">保存设置</button></div>
-            <div class="card"><h3>📢 公告/广告</h3><textarea id="userAnnounce" rows="2" placeholder="用户公告">${announcements.user||''}</textarea><button id="sendUserAnnounce">发送用户公告</button><textarea id="gamerAnnounce" rows="2" placeholder="打手公告">${announcements.gamer||''}</textarea><button id="sendGamerAnnounce">发送打手公告</button></div>
-            <div class="card"><h3>🏷️ 市场价格配置</h3><div><strong>游戏底价</strong><div id="basePriceList"></div><div class="flex"><input id="newGameName" placeholder="游戏名"><input id="newGamePrice" placeholder="底价(元)"><button id="addGamePrice">添加游戏底价</button></div></div><hr><div><strong>关键词溢价</strong><div id="keywordPriceList"></div><div class="flex"><input id="newKeyword" placeholder="关键词"><input id="newKeywordPrice" placeholder="溢价(元)"><button id="addKeywordPrice">添加关键词溢价</button></div></div></div>
-            <div class="card"><h3>🎁 优惠券管理</h3><div class="flex"><select id="couponUser"><option value="">-- 选择用户 --</option>${users.map(u => `<option value="${u.uid}">${u.username}</option>`).join('')}</select><input id="couponName" placeholder="优惠券名称" value="福利券"><input id="couponValue" placeholder="面值(元)" value="20" type="number"><input id="couponMinAmount" placeholder="满减门槛(元)" value="50" type="number"></div><button id="sendCouponBtn">发放优惠券</button></div>
-            <div class="card"><h3>➕ 创建账号</h3><div class="flex"><input id="newUserName" placeholder="昵称"><input id="newUserLogin" placeholder="账号"><input id="newUserPwd" placeholder="密码"></div><button id="createUser">创建玩家</button><div class="flex"><input id="newGamerName" placeholder="昵称"><input id="newGamerLogin" placeholder="账号"><input id="newGamerPwd" placeholder="密码"></div><button id="createGamer">创建打手</button></div>
-            <div class="card"><h3>👥 玩家管理</h3><div id="userList" style="max-height:300px;overflow-y:auto;"></div></div>
-            <div class="card"><h3>🔫 打手管理</h3><div id="gamerList" style="max-height:300px;overflow-y:auto;"></div></div>
+            <div class="card"><h2>📊 数据看板</h2><div>👥 玩家：${users.length} | 🔫 打手：${gamers.length}</div><div>📦 订单：${orders.length} | 💰 装备：${equipments.length}</div><div>💰 总余额：${totalBalance}元 | ⏳ 待审：${gamers.filter(g=>g.verifyStatus==='pending').length}</div><canvas id="statsChart" style="max-height:180px;"></canvas></div>
+            <div class="card"><h3>⚙️ 系统设置</h3><label>平台抽成(%)</label><input id="fee" value="${settings.platformFee||10}" type="number"><label>玩家最低提现</label><input id="minUser" value="${settings.minWithdrawUser||20}" type="number"><label>打手最低提现</label><input id="minGamer" value="${settings.minWithdrawGamer||25}" type="number"><label>超时取消(小时)</label><input id="cancelHours" value="${settings.autoCancelHours||24}" type="number"><label>超时确认(小时)</label><input id="confirmHours" value="${settings.autoConfirmHours||72}" type="number"><label>防刷单限制(单/单位时间)</label><input id="antiLimit" value="${settings.antiBrushLimit||5}" type="number"><label>防刷单位时间(分钟)</label><input id="antiMinutes" value="${settings.antiBrushMinutes||10}" type="number"><label>装备交易手续费(%)</label><input id="equipFee" value="${settings.equipmentFee||5}" type="number"><button id="saveSettings">保存设置</button></div>
+            <div class="card"><h3>📢 公告/广告</h3><textarea id="userAnnounce" rows="2" placeholder="用户公告">${announcements.user||''}</textarea><button id="sendUserAnnounce">发送用户公告</button><textarea id="gamerAnnounce" rows="2" placeholder="打手公告">${announcements.gamer||''}</textarea><button id="sendGamerAnnounce">发送打手公告</button><select id="adType"><option value="text" ${announcements.ad?.type==='text'?'selected':''}>文字广告</option><option value="image" ${announcements.ad?.type==='image'?'selected':''}>图片广告</option></select><input id="adContent" placeholder="广告内容" value="${announcements.ad?.content||''}"><input id="adLink" placeholder="广告链接" value="${announcements.ad?.link||''}"><button id="saveAd">保存广告</button></div>
+            <div class="card"><h3>👥 用户/打手管理</h3><div class="flex"><input id="newUserName" placeholder="昵称"><input id="newUserLogin" placeholder="账号"><input id="newUserPwd" placeholder="密码"></div><button id="createUser">创建玩家</button><div class="flex"><input id="newGamerName" placeholder="昵称"><input id="newGamerLogin" placeholder="账号"><input id="newGamerPwd" placeholder="密码"></div><button id="createGamer">创建打手</button></div>
+            <div class="card"><h3>👥 玩家列表</h3><div id="userList" style="max-height:300px;overflow-y:auto;"></div></div>
+            <div class="card"><h3>🔫 打手列表(含实名审核)</h3><div id="gamerList" style="max-height:300px;overflow-y:auto;"></div></div>
             <div class="card"><h3>💰 充值审核</h3><div id="rechargeList"></div></div>
             <div class="card"><h3>💸 提现审核</h3><div id="withdrawList"></div></div>
             <div class="card"><h3>⚠️ 投诉处理</h3><div id="complaintList"></div></div>
+            <div class="card"><h3>🌐 IP黑名单</h3><div class="flex"><input id="newIp" placeholder="IP地址"><button id="addIp">添加</button></div><div id="ipList"></div></div>
+            <div class="card"><h3>📜 操作日志</h3><div class="flex"><select id="logType"><option value="">全部</option><option value="auth">登录</option><option value="order">订单</option><option value="finance">财务</option></select><button id="searchLogs">筛选</button></div><div id="logList" class="log-list"></div></div>
         </div>
     `;
     container.innerHTML = html;
     
-    // 渲染价格配置
-    let baseDiv = document.getElementById('basePriceList');
-    baseDiv.innerHTML = Object.entries(marketPrices.base || {}).map(([k,v]) => `<div class="price-item">${k}: ${v}元 <button class="delBase" data-key="${k}">删除</button></div>`).join('');
-    let keywordDiv = document.getElementById('keywordPriceList');
-    keywordDiv.innerHTML = Object.entries(marketPrices.keywords || {}).map(([k,v]) => `<div class="price-item">${k}: +${v}元 <button class="delKeyword" data-key="${k}">删除</button></div>`).join('');
+    // 简单图表
+    let ctx = document.getElementById('statsChart')?.getContext('2d');
+    if(ctx && typeof Chart !== 'undefined') {
+        new Chart(ctx, { type:'bar', data:{ labels:['玩家','打手','订单'], datasets:[{ label:'数量', data:[users.length, gamers.length, orders.length], backgroundColor:'#f59e0b' }] } });
+    }
     
-    document.getElementById('addGamePrice')?.addEventListener('click', () => {
-        let name = document.getElementById('newGameName').value;
-        let price = parseInt(document.getElementById('newGamePrice').value);
-        if(name && price) { let mp = getMarketPrices(); mp.base[name] = price; setMarketPrices(mp); render(); }
-    });
-    document.getElementById('addKeywordPrice')?.addEventListener('click', () => {
-        let kw = document.getElementById('newKeyword').value;
-        let price = parseInt(document.getElementById('newKeywordPrice').value);
-        if(kw && price) { let mp = getMarketPrices(); mp.keywords[kw] = price; setMarketPrices(mp); render(); }
-    });
-    document.querySelectorAll('.delBase').forEach(btn => { btn.addEventListener('click', () => { let mp = getMarketPrices(); delete mp.base[btn.dataset.key]; setMarketPrices(mp); render(); }); });
-    document.querySelectorAll('.delKeyword').forEach(btn => { btn.addEventListener('click', () => { let mp = getMarketPrices(); delete mp.keywords[btn.dataset.key]; setMarketPrices(mp); render(); }); });
-    
-    // 保存设置
-    document.getElementById('saveSettings')?.addEventListener('click', () => { setSettings({ platformFee: parseInt(document.getElementById('fee').value), minWithdrawUser: parseInt(document.getElementById('minUser').value), minWithdrawGamer: parseInt(document.getElementById('minGamer').value) }); alert("设置已保存"); });
+    document.getElementById('saveSettings')?.addEventListener('click', () => { setSettings({ platformFee: parseInt(document.getElementById('fee').value), minWithdrawUser: parseInt(document.getElementById('minUser').value), minWithdrawGamer: parseInt(document.getElementById('minGamer').value), autoCancelHours: parseInt(document.getElementById('cancelHours').value), autoConfirmHours: parseInt(document.getElementById('confirmHours').value), antiBrushLimit: parseInt(document.getElementById('antiLimit').value), antiBrushMinutes: parseInt(document.getElementById('antiMinutes').value), equipmentFee: parseInt(document.getElementById('equipFee').value) }); alert("设置已保存"); });
     document.getElementById('sendUserAnnounce')?.addEventListener('click', () => { let ann = getAnnouncements(); ann.user = document.getElementById('userAnnounce').value; setAnnouncements(ann); alert("已发送"); });
     document.getElementById('sendGamerAnnounce')?.addEventListener('click', () => { let ann = getAnnouncements(); ann.gamer = document.getElementById('gamerAnnounce').value; setAnnouncements(ann); alert("已发送"); });
+    document.getElementById('saveAd')?.addEventListener('click', () => { let ann = getAnnouncements(); ann.ad = { type: document.getElementById('adType').value, content: document.getElementById('adContent').value, link: document.getElementById('adLink').value }; setAnnouncements(ann); alert("广告已保存"); });
     
-    // 发放优惠券
-    document.getElementById('sendCouponBtn')?.addEventListener('click', () => {
-        let uid = document.getElementById('couponUser').value, name = document.getElementById('couponName').value, value = parseInt(document.getElementById('couponValue').value), minAmount = parseInt(document.getElementById('couponMinAmount').value);
-        if (!uid || !name) return alert("填完整");
-        let usersArr = getUsers();
-        let user = usersArr.find(u => u.uid === uid);
-        if (user) { if (!user.coupons) user.coupons = []; user.coupons.push({ id: Date.now(), name, value, minAmount, expireTime: Date.now() + 30*86400000, used: false }); setUsers(usersArr); alert("发放成功"); render(); }
+    document.getElementById('createUser')?.addEventListener('click', () => {
+        let name = document.getElementById('newUserName').value, login = document.getElementById('newUserLogin').value, pwd = document.getElementById('newUserPwd').value;
+        if (!name || !login || !pwd) return alert("填完整");
+        let arr = getUsers();
+        if (arr.find(u => u.loginId === login)) return alert("账号已存在");
+        arr.push({ uid: 'u'+Date.now(), username: name, loginId: login, pwd: encryptPwd(pwd), balance: 0, level: 'user', banned: false, frozenBalance: 0, inviter: null, regTime: Date.now() });
+        setUsers(arr);
+        addLog('auth', 'admin', '创建玩家', `${name}(${login})`);
+        alert("创建成功");
+        render();
+    });
+    document.getElementById('createGamer')?.addEventListener('click', () => {
+        let name = document.getElementById('newGamerName').value, login = document.getElementById('newGamerLogin').value, pwd = document.getElementById('newGamerPwd').value;
+        if (!name || !login || !pwd) return alert("填完整");
+        let arr = getGamers();
+        if (arr.find(g => g.loginId === login)) return alert("账号已存在");
+        arr.push({ gid: 'g'+Date.now(), username: name, loginId: login, pwd: encryptPwd(pwd), skills: [], balance: 0, level: 'junior_gamer', banned: false, approved: true, verifyStatus: 'not', totalOrders: 0, frozenBalance: 0 });
+        setGamers(arr);
+        addLog('auth', 'admin', '创建打手', `${name}(${login})`);
+        alert("创建成功");
+        render();
     });
     
-    // 玩家管理
+    // 玩家列表
     let userDiv = document.getElementById('userList');
-    userDiv.innerHTML = users.map(u => `<div class="flex" style="justify-content:space-between;"><span>${u.username} | 余额${u.balance}</span><div><button class="banUser" data-uid="${u.uid}">${u.banned?'解封':'封禁'}</button><button class="addBalance" data-uid="${u.uid}">加余额</button></div></div>`).join('');
+    userDiv.innerHTML = users.map(u => `<div class="flex" style="justify-content:space-between;"><span>${u.username} | 余额${u.balance} | ${u.level} ${u.banned?'[封禁]':''}</span><div><button class="banUser" data-uid="${u.uid}">${u.banned?'解封':'封禁'}</button><button class="freezeUser" data-uid="${u.uid}">冻结余额</button><button class="addBalance" data-uid="${u.uid}">加余额</button></div></div>`).join('');
     document.querySelectorAll('.banUser').forEach(btn => { btn.addEventListener('click', () => { let u = getUsers().find(x=>x.uid===btn.dataset.uid); if(u) u.banned = !u.banned; setUsers(getUsers()); render(); }); });
+    document.querySelectorAll('.freezeUser').forEach(btn => { btn.addEventListener('click', () => { let uid = btn.dataset.uid, amt = prompt("冻结金额"); if(amt) { let u = getUsers().find(x=>x.uid===uid); if(u) { u.frozenBalance = (u.frozenBalance||0) + parseInt(amt); u.balance -= parseInt(amt); setUsers(getUsers()); alert(`已冻结 ${amt} 元`); render(); } } }); });
     document.querySelectorAll('.addBalance').forEach(btn => { btn.addEventListener('click', () => { let amt = prompt("增加余额"); if(amt) changeUserBalance(btn.dataset.uid, parseInt(amt), '手动加余额'); render(); }); });
     
-    // 打手管理
+    // 打手列表
     let gamerDiv = document.getElementById('gamerList');
     gamerDiv.innerHTML = gamers.map(g => `<div class="flex" style="justify-content:space-between;"><span>${g.username} | 余额${g.balance} | 实名:${g.verifyStatus||'未认证'}</span><div><button class="approveVerify" data-gid="${g.gid}">通过</button><button class="banGamer" data-gid="${g.gid}">${g.banned?'解封':'封禁'}</button><button class="addGamerBalance" data-gid="${g.gid}">加余额</button></div></div>`).join('');
-    document.querySelectorAll('.approveVerify').forEach(btn => { let g = getGamers().find(x=>x.gid===btn.dataset.gid); if(g) g.verifyStatus='verified'; setGamers(getGamers()); render(); });
+    document.querySelectorAll('.approveVerify').forEach(btn => { let g = getGamers().find(x=>x.gid===btn.dataset.gid); if(g) { g.verifyStatus='verified'; addLog('auth', g.gid, '实名审核', `通过 ${g.username} 实名`); setGamers(getGamers()); render(); } });
     document.querySelectorAll('.banGamer').forEach(btn => { let g = getGamers().find(x=>x.gid===btn.dataset.gid); if(g) g.banned = !g.banned; setGamers(getGamers()); render(); });
     document.querySelectorAll('.addGamerBalance').forEach(btn => { let amt = prompt("增加余额"); if(amt) changeGamerBalance(btn.dataset.gid, parseInt(amt), '手动加余额'); render(); });
     
-    // 充值提现投诉逻辑
+    // 充值审核
     let rechargeDiv = document.getElementById('rechargeList');
-    rechargeDiv.innerHTML = rechargeReqs.map(r => `<div class="order-item">用户${r.userId} 金额${r.amount}<button class="confirmRecharge" data-id="${r.id}">确认</button><button class="rejectRecharge" data-id="${r.id}">驳回</button></div>`).join('');
-    document.querySelectorAll('.confirmRecharge').forEach(btn => { btn.addEventListener('click', () => { let req = getRechargeReqs().find(x=>x.id==parseInt(btn.dataset.id)); if(req) { changeUserBalance(req.userId, req.amount, '充值'); setRechargeReqs(getRechargeReqs().filter(x=>x.id!==req.id)); render(); } }); });
+    rechargeDiv.innerHTML = rechargeReqs.map(r => `<div class="order-item">用户${r.userId} 金额${r.amount} 凭证：${r.proof}<div class="flex"><button class="confirmRecharge" data-id="${r.id}">确认</button><button class="rejectRecharge" data-id="${r.id}">驳回</button></div></div>`).join('');
+    document.querySelectorAll('.confirmRecharge').forEach(btn => { btn.addEventListener('click', () => { let req = getRechargeReqs().find(x=>x.id==parseInt(btn.dataset.id)); if(req) { changeUserBalance(req.userId, req.amount, '充值到账'); addLog('finance', req.userId, '充值', `充值 ${req.amount} 元`); setRechargeReqs(getRechargeReqs().filter(x=>x.id!==req.id)); render(); } }); });
     document.querySelectorAll('.rejectRecharge').forEach(btn => { btn.addEventListener('click', () => { let id = parseInt(btn.dataset.id); setRechargeReqs(getRechargeReqs().filter(x=>x.id!==id)); render(); }); });
+    
+    // 提现审核
     let withdrawDiv = document.getElementById('withdrawList');
-    withdrawDiv.innerHTML = withdrawReqs.map(w => `<div class="order-item">用户${w.userId} 金额${w.amount}<button class="confirmWithdraw" data-id="${w.id}">确认打款</button><button class="rejectWithdraw" data-id="${w.id}">驳回</button></div>`).join('');
-    document.querySelectorAll('.confirmWithdraw').forEach(btn => { let id = parseInt(btn.dataset.id); setWithdrawReqs(getWithdrawReqs().filter(x=>x.id!==id)); alert("已确认打款"); render(); });
+    withdrawDiv.innerHTML = withdrawReqs.map(w => `<div class="order-item">用户${w.userId} 金额${w.amount} 账号${w.account}<div class="flex"><button class="confirmWithdraw" data-id="${w.id}">确认打款</button><button class="rejectWithdraw" data-id="${w.id}">驳回</button></div></div>`).join('');
+    document.querySelectorAll('.confirmWithdraw').forEach(btn => { let id = parseInt(btn.dataset.id); setWithdrawReqs(getWithdrawReqs().filter(x=>x.id!==id)); alert("已确认打款"); addLog('finance', 'admin', '提现打款', `打款金额 ${getWithdrawReqs().find(x=>x.id===id)?.amount}`); render(); });
     document.querySelectorAll('.rejectWithdraw').forEach(btn => { let id = parseInt(btn.dataset.id); setWithdrawReqs(getWithdrawReqs().filter(x=>x.id!==id)); render(); });
+    
+    // 投诉处理
     let complaintDiv = document.getElementById('complaintList');
-    complaintDiv.innerHTML = complaints.map(c => `<div class="order-item">订单${c.oid} 玩家${c.userName} 投诉${c.gamerName}<br>原因：${c.reason}<button class="resolveComplaint" data-id="${c.id}">标记处理</button></div>`).join('');
+    complaintDiv.innerHTML = complaints.map(c => `<div class="order-item">订单${c.oid} 玩家${c.userName} 投诉${c.gamerName}<br>原因：${c.reason}<div class="flex"><button class="resolveComplaint" data-id="${c.id}">标记处理</button><button class="refundComplaint" data-id="${c.id}" data-oid="${c.oid}" data-user="${c.userId}" data-amount="${c.amount||0}">退款+封禁</button></div></div>`).join('');
     document.querySelectorAll('.resolveComplaint').forEach(btn => { let id = parseInt(btn.dataset.id); setComplaints(getComplaints().filter(x=>x.id!==id)); render(); });
+    document.querySelectorAll('.refundComplaint').forEach(btn => { btn.addEventListener('click', () => { let cid = parseInt(btn.dataset.id), oid = btn.dataset.oid, userId = btn.dataset.user, amount = parseInt(btn.dataset.amount); changeUserBalance(userId, amount, '投诉退款'); let orders = getOrders(); let ord = orders.find(o=>o.oid===oid); if(ord && ord.gamerId) { let gamers = getGamers(); let g = gamers.find(g=>g.gid===ord.gamerId); if(g) g.banned = true; setGamers(gamers); } setComplaints(getComplaints().filter(x=>x.id!==cid)); alert("已退款并封禁打手"); render(); }); });
+    
+    // IP黑名单
+    let ipDiv = document.getElementById('ipList');
+    ipDiv.innerHTML = blacklistIp.map(ip => `<div>${ip}<button class="delIp" data-ip="${ip}">删除</button></div>`).join('');
+    document.getElementById('addIp')?.addEventListener('click', () => { let ip = document.getElementById('newIp').value; if(ip) { let arr = getBlacklistIp(); arr.push(ip); setBlacklistIp(arr); render(); } });
+    document.querySelectorAll('.delIp').forEach(btn => { btn.addEventListener('click', () => { let ip = btn.dataset.ip; setBlacklistIp(getBlacklistIp().filter(x=>x!==ip)); render(); }); });
+    
+    // 日志
+    let filterType = document.getElementById('logType')?.value || '';
+    let filtered = filterType ? logs.filter(l=>l.type===filterType) : logs;
+    let logDiv = document.getElementById('logList');
+    logDiv.innerHTML = filtered.slice(0,200).map(l => `<div class="log-item">[${l.time}] [${l.type}] ${l.userId} ${l.action}：${l.detail}</div>`).join('');
+    document.getElementById('searchLogs')?.addEventListener('click', () => render());
 }
 render();
 </script>
