@@ -43,11 +43,11 @@ if (!localStorage.getItem('club_blacklist_ip')) localStorage.setItem('club_black
 if (!localStorage.getItem('club_logs')) localStorage.setItem('club_logs', JSON.stringify([]));
 if (!localStorage.getItem('club_finance_logs')) localStorage.setItem('club_finance_logs', JSON.stringify([]));
 if (!localStorage.getItem('club_festival_log')) localStorage.setItem('club_festival_log', JSON.stringify({}));
-// 初始化市场价格库
+// 初始化市场价格库（便宜版 + 无敌战神100）
 if (!localStorage.getItem('club_market_prices')) {
     localStorage.setItem('club_market_prices', JSON.stringify({
-        base: { '和平精英': 40, '地铁逃生': 50, '百万撤离': 60, '千万撤离': 80, 'PUBG': 45, '三角洲行动': 55 },
-        keywords: { '无敌战神': 100, '战神': 80, '王牌': 50, '皇冠': 35, '星钻': 20, '热成像': 45, '六套': 60, '七套': 80, '八套': 100, '九套': 120, '十套': 150, '百万撤离': 50, '千万撤离': 90, '地铁': 30 }
+        base: { '和平精英': 20, '地铁逃生': 25, '百万撤离': 30, '千万撤离': 40, 'PUBG': 20, '三角洲行动': 25 },
+        keywords: { '无敌战神': 100, '战神': 60, '王牌': 20, '皇冠': 15, '星钻': 10, '热成像': 20, '六套': 25, '七套': 35, '八套': 45, '九套': 55, '十套': 70, '百万撤离': 30, '千万撤离': 40, '地铁': 15 }
     }));
 }
 
@@ -161,18 +161,18 @@ function render() {
     
     // 打手管理
     let gamerDiv = document.getElementById('gamerList');
-    gamerDiv.innerHTML = gamers.map(g => `<div class="flex" style="justify-content:space-between;"><span>${g.username} | 余额${g.balance} | 实名:${g.verifyStatus||'未认证'}</span><div><button class="approveVerify" data-gid="${g.gid}">✅通过</button><button class="banGamer" data-gid="${g.gid}">${g.banned?'解封':'封禁'}</button><button class="addGamerBalance" data-gid="${g.gid}">加余额</button></div></div>`).join('');
+    gamerDiv.innerHTML = gamers.map(g => `<div class="flex" style="justify-content:space-between;"><span>${g.username} | 余额${g.balance} | 实名:${g.verifyStatus||'未认证'}</span><div><button class="approveVerify" data-gid="${g.gid}">通过</button><button class="banGamer" data-gid="${g.gid}">${g.banned?'解封':'封禁'}</button><button class="addGamerBalance" data-gid="${g.gid}">加余额</button></div></div>`).join('');
     document.querySelectorAll('.approveVerify').forEach(btn => { let g = getGamers().find(x=>x.gid===btn.dataset.gid); if(g) g.verifyStatus='verified'; setGamers(getGamers()); render(); });
     document.querySelectorAll('.banGamer').forEach(btn => { let g = getGamers().find(x=>x.gid===btn.dataset.gid); if(g) g.banned = !g.banned; setGamers(getGamers()); render(); });
     document.querySelectorAll('.addGamerBalance').forEach(btn => { let amt = prompt("增加余额"); if(amt) changeGamerBalance(btn.dataset.gid, parseInt(amt), '手动加余额'); render(); });
     
-    // 充值提现投诉逻辑（保持不变）
+    // 充值提现投诉逻辑
     let rechargeDiv = document.getElementById('rechargeList');
-    rechargeDiv.innerHTML = rechargeReqs.map(r => `<div class="order-item">用户${r.userId} 金额${r.amount}<button class="confirmRecharge" data-id="${r.id}">✅确认</button><button class="rejectRecharge" data-id="${r.id}">❌驳回</button></div>`).join('');
+    rechargeDiv.innerHTML = rechargeReqs.map(r => `<div class="order-item">用户${r.userId} 金额${r.amount}<button class="confirmRecharge" data-id="${r.id}">确认</button><button class="rejectRecharge" data-id="${r.id}">驳回</button></div>`).join('');
     document.querySelectorAll('.confirmRecharge').forEach(btn => { btn.addEventListener('click', () => { let req = getRechargeReqs().find(x=>x.id==parseInt(btn.dataset.id)); if(req) { changeUserBalance(req.userId, req.amount, '充值'); setRechargeReqs(getRechargeReqs().filter(x=>x.id!==req.id)); render(); } }); });
     document.querySelectorAll('.rejectRecharge').forEach(btn => { btn.addEventListener('click', () => { let id = parseInt(btn.dataset.id); setRechargeReqs(getRechargeReqs().filter(x=>x.id!==id)); render(); }); });
     let withdrawDiv = document.getElementById('withdrawList');
-    withdrawDiv.innerHTML = withdrawReqs.map(w => `<div class="order-item">用户${w.userId} 金额${w.amount}<button class="confirmWithdraw" data-id="${w.id}">✅确认打款</button><button class="rejectWithdraw" data-id="${w.id}">❌驳回</button></div>`).join('');
+    withdrawDiv.innerHTML = withdrawReqs.map(w => `<div class="order-item">用户${w.userId} 金额${w.amount}<button class="confirmWithdraw" data-id="${w.id}">确认打款</button><button class="rejectWithdraw" data-id="${w.id}">驳回</button></div>`).join('');
     document.querySelectorAll('.confirmWithdraw').forEach(btn => { let id = parseInt(btn.dataset.id); setWithdrawReqs(getWithdrawReqs().filter(x=>x.id!==id)); alert("已确认打款"); render(); });
     document.querySelectorAll('.rejectWithdraw').forEach(btn => { let id = parseInt(btn.dataset.id); setWithdrawReqs(getWithdrawReqs().filter(x=>x.id!==id)); render(); });
     let complaintDiv = document.getElementById('complaintList');
