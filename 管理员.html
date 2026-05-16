@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>龙傲天俱乐部 · 管理后台</title>
+    <style>
+        * { box-sizing: border-box; }
+        body { background: #ffffff; margin: 0; padding: 15px; font-family: system-ui; color: #1e293b; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .card { background: white; border-radius: 24px; padding: 18px; margin-bottom: 18px; border: 1px solid #e2e8f0; }
+        h2, h3 { color: #0f172a; margin: 0 0 12px 0; border-left: 4px solid #f5c542; padding-left: 12px; }
+        button, input, textarea, select { width: 100%; padding: 10px; margin: 5px 0; border-radius: 40px; border: 1px solid #cbd5e1; background: white; color: #0f172a; }
+        button { background: #f5c542; font-weight: bold; border: none; cursor: pointer; }
+        .gray-btn { background: #e2e8f0; border: 1px solid #cbd5e1; }
+        .flex { display: flex; gap: 10px; flex-wrap: wrap; }
+        .order-item { background: #f8fafc; border-radius: 20px; padding: 12px; margin-bottom: 12px; border-left: 4px solid #f5c542; }
+    </style>
+</head>
+<body>
+<div class="container" id="app"></div>
+<script>
+(function() {
+    if (!localStorage.getItem('club_users')) localStorage.setItem('club_users', JSON.stringify([]));
+    if (!localStorage.getItem('club_gamers')) localStorage.setItem('club_gamers', JSON.stringify([]));
+    if (!localStorage.getItem('club_orders')) localStorage.setItem('club_orders', JSON.stringify([]));
+    if (!localStorage.getItem('club_equipment')) localStorage.setItem('club_equipment', JSON.stringify([]));
+    if (!localStorage.getItem('club_admin')) localStorage.setItem('club_admin', JSON.stringify({ loginId: 'admin', pwd: 'admin123' }));
+    if (!localStorage.getItem('club_recharge_reqs')) localStorage.setItem('club_recharge_reqs', JSON.stringify([]));
+    if (!localStorage.getItem('club_withdraw_reqs')) localStorage.setItem('club_withdraw_reqs', JSON.stringify([]));
+    if (!localStorage.getItem('club_complaints')) localStorage.setItem('club_complaints', JSON.stringify([]));
+    if (!localStorage.getItem('club_announcements')) localStorage.setItem('club_announcements', JSON.stringify({ user: '', gamer: '' }));
+
+    function getUsers() { return JSON.parse(localStorage.getItem('club_users') || '[]'); }
+    function setUsers(v) { localStorage.setItem('club_users', JSON.stringify(v)); }
+    function getGamers() { return JSON.parse(localStorage.getItem('club_gamers') || '[]'); }
+    function setGamers(v) { localStorage.setItem('club_gamers', JSON.stringify(v)); }
+    function getOrders() { return JSON.parse(localStorage.getItem('club_orders') || '[]'); }
+    function setOrders(v) { localStorage.setItem('club_orders', JSON.stringify(v)); }
+    function getEquipment() { return JSON.parse(localStorage.getItem('club_equipment') || '[]'); }
+    function setEquipment(v) { localStorage.setItem('club_equipment', JSON.stringify(v)); }
+    function getRechargeReqs() { return JSON.parse(localStorage.getItem('club_recharge_reqs') || '[]'); }
+    function setRechargeReqs(v) { localStorage.setItem('club_recharge_reqs', JSON.stringify(v)); }
+    function getWithdrawReqs() { return JSON.parse(localStorage.getItem('club_withdraw_reqs') || '[]'); }
+    function setWithdrawReqs(v) { localStorage.setItem('club_withdraw_reqs', JSON.stringify(v)); }
+    function getComplaints() { return JSON.parse(localStorage.getItem('club_complaints') || '[]'); }
+    function setComplaints(v) { localStorage.setItem('club_complaints', JSON.stringify(v)); }
+    function getAnnouncements() { return JSON.parse(localStorage.getItem('club_announcements') || '{"user":"","gamer":""}'); }
+    function setAnnouncements(v) { localStorage.setItem('club_announcements', JSON.stringify(v)); }
+
+    let currentAdmin = null;
+    function saveAdmin(user) { currentAdmin = user; localStorage.setItem('club_admin_session', JSON.stringify(user ? { uid: user.uid } : null)); render(); }
+    function getSession() { let raw = localStorage.getItem('club_admin_session'); if (!raw) return null; let sess = JSON.parse(raw); if (!sess) return null; let admin = JSON.parse(localStorage.getItem('club_admin')); if (sess.uid === 'admin') return { uid: 'admin', role: 'admin' }; return null; }
+    function changeUserBalance(uid, amount) { let users = getUsers(); let u = users.find(x => x.uid === uid); if (u) u.balance += amount; setUsers(users); render(); }
+    function changeGamerBalance(gid, amount) { let gamers = getGamers(); let g = gamers.find(x => x.gid === gid); if (g) g.balance += amount; setGamers(gamers); render(); }
+
+    function render() {
+        let container = document.getElementById('app');
+        if (!container) return;
+        let sess = getSession();
+        if (!sess) {
+            container.innerHTML = `<div class="card"><h2>👑 管理后台登录</h2><input id="adminUser" placeholder="账号"><input id="adminPwd" type="password" placeholder="密码"><button id="loginBtn">登录</button><div style="margin-top:12px;">演示账号: admin / admin123</div></div>`;
+            document.getElementById('loginBtn')?.addEventListener('click', () => {
+                let user = document.getElementById('adminUser').value, pwd = document.getElementById('adminPwd').value;
+                let admin = JSON.parse(localStorage.getItem('club_admin'));
+                if (user === admin.loginId && pwd === admin.pwd) { saveAdmin({ uid: 'admin' }); } else alert("账号或密码错误");
+            });
+            return;
+        }
+
+        let users = getUsers();
+        let gamers = getGamers();
+        let orders = getOrders();
+        let equipments = getEquipment();
+        let rechargeReqs = getRechargeReqs();
+        let withdrawReqs = getWithdrawReqs();
+        let complaints = getComplaints();
+        let announcements = getAnnouncements();
+        let html = `
+            <div class="card"><h2>👑 管理后台</h2><button id="logoutBtn" class="gray-btn">退出</button></div>
+            <div class="card"><h3>📊 统计</h3><div>玩家：${users.length} | 打手：${gamers.length} | 订单：${orders.length}</div></div>
+            <div class="card"><h3>📢 公告</h3>
+                <textarea id="userAnnouncement" rows="2" placeholder="用户公告">${announcements.user}</textarea><button id="sendUserAnnouncement">发送用户公告</button>
+                <textarea id="gamerAnnouncement" rows="2" placeholder="打手公告">${announcements.gamer}</textarea><button id="sendGamerAnnouncement">发送打手公告</button>
+            </div>
+            <div class="card"><h3>➕ 创建玩家</h3><input id="newUserName" placeholder="昵称"><input id="newUserLogin" placeholder="账号"><input id="newUserPwd" placeholder="密码"><button id="createUserBtn">创建玩家</button></div>
+            <div class="card"><h3>➕ 创建打手</h3><input id="newGamerName" placeholder="昵称"><input id="newGamerLogin" placeholder="账号"><input id="newGamerPwd" placeholder="密码"><button id="createGamerBtn">创建打手</button></div>
+            <div class="card"><h3>👥 玩家管理</h3><div id="userList"></div></div>
+            <div class="card"><h3>🔫 打手管理</h3><div id="gamerListAdmin"></div></div>
+            <div class="card"><h3>💰 充值审核</h3><div id="rechargeReqs"></div></div>
+            <div class="card"><h3>💸 提现审核</h3><div id="withdrawReqs"></div></div>
+            <div class="card"><h3>⚠️ 投诉管理</h3><div id="complaintListAdmin"></div></div>
+        `;
+        container.innerHTML = html;
+        document.getElementById('logoutBtn')?.addEventListener('click', () => { localStorage.removeItem('club_admin_session'); render(); });
+
+        document.getElementById('sendUserAnnouncement')?.addEventListener('click', () => { let ann = getAnnouncements(); ann.user = document.getElementById('userAnnouncement').value; setAnnouncements(ann); alert("已发送"); });
+        document.getElementById('sendGamerAnnouncement')?.addEventListener('click', () => { let ann = getAnnouncements(); ann.gamer = document.getElementById('gamerAnnouncement').value; setAnnouncements(ann); alert("已发送"); });
+
+        document.getElementById('createUserBtn')?.addEventListener('click', () => {
+            let name = document.getElementById('newUserName').value, login = document.getElementById('newUserLogin').value, pwd = document.getElementById('newUserPwd').value;
+            if (!name || !login || !pwd) { alert("填完整"); return; }
+            let usersArr = getUsers();
+            if (usersArr.find(u => u.loginId === login)) { alert("账号已存在"); return; }
+            usersArr.push({ uid: 'u' + Date.now(), username: name, loginId: login, pwd: pwd, balance: 0, banned: false, role: 'user' });
+            setUsers(usersArr);
+            alert("创建成功");
+            render();
+        });
+        document.getElementById('createGamerBtn')?.addEventListener('click', () => {
+            let name = document.getElementById('newGamerName').value, login = document.getElementById('newGamerLogin').value, pwd = document.getElementById('newGamerPwd').value;
+            if (!name || !login || !pwd) { alert("填完整"); return; }
+            let gamersArr = getGamers();
+            if (gamersArr.find(g => g.loginId === login)) { alert("账号已存在"); return; }
+            gamersArr.push({ gid: 'g' + Date.now(), username: name, loginId: login, pwd: pwd, skills: [], balance: 0, banned: false, avgRating: 0, totalOrders: 0, approved: true, verifyStatus: 'verified' });
+            setGamers(gamersArr);
+            alert("创建成功");
+            render();
+        });
+
+        let userDiv = document.getElementById('userList');
+        userDiv.innerHTML = users.map(u => `<div>${u.username} 余额${u.balance} ${u.banned?'[封禁]':''} <button class="banUser" data-uid="${u.uid}">封禁/解封</button> <button class="addBalance" data-uid="${u.uid}">加余额</button></div>`).join('');
+        document.querySelectorAll('.banUser').forEach(btn => { btn.addEventListener('click', () => { let uid = btn.dataset.uid; let arr = getUsers(); let u = arr.find(x => x.uid === uid); if (u) u.banned = !u.banned; setUsers(arr); render(); }); });
+        document.querySelectorAll('.addBalance').forEach(btn => { btn.addEventListener('click', () => { let uid = btn.dataset.uid; let amt = prompt("增加余额"); if (amt) { let arr = getUsers(); let u = arr.find(x => x.uid === uid); if (u) u.balance += parseInt(amt); setUsers(arr); render(); } }); });
+
+        let gamerDiv = document.getElementById('gamerListAdmin');
+        gamerDiv.innerHTML = gamers.map(g => `<div>${g.username} 余额${g.balance} ${g.banned?'[封禁]':''} <button class="banGamer" data-gid="${g.gid}">封禁/解封</button> <button class="delGamer" data-gid="${g.gid}">删除</button></div>`).join('');
+        document.querySelectorAll('.banGamer').forEach(btn => { btn.addEventListener('click', () => { let gid = btn.dataset.gid; let arr = getGamers(); let g = arr.find(x => x.gid === gid); if (g) g.banned = !g.banned; setGamers(arr); render(); }); });
+        document.querySelectorAll('.delGamer').forEach(btn => { btn.addEventListener('click', () => { let gid = btn.dataset.gid; setGamers(getGamers().filter(x => x.gid !== gid)); render(); }); });
+
+        let rechargeDiv = document.getElementById('rechargeReqs');
+        rechargeDiv.innerHTML = rechargeReqs.map(r => `<div>用户${r.userId} 金额${r.amount} <button class="confirmRecharge" data-id="${r.id}">确认到账</button> <button class="rejectRecharge" data-id="${r.id}">驳回</button></div>`).join('');
+        document.querySelectorAll('.confirmRecharge').forEach(btn => { btn.addEventListener('click', () => { let rid = parseInt(btn.dataset.id); let reqs = getRechargeReqs(); let req = reqs.find(x => x.id === rid); if (req) { if (req.type === 'user') changeUserBalance(req.userId, req.amount); else changeGamerBalance(req.userId, req.amount); setRechargeReqs(reqs.filter(x => x.id !== rid)); render(); } }); });
+        document.querySelectorAll('.rejectRecharge').forEach(btn => { btn.addEventListener('click', () => { let rid = parseInt(btn.dataset.id); setRechargeReqs(getRechargeReqs().filter(x => x.id !== rid)); render(); }); });
+
+        let withdrawDiv = document.getElementById('withdrawReqs');
+        withdrawDiv.innerHTML = withdrawReqs.map(w => `<div>用户${w.userId} 金额${w.amount} 账号${w.account} <button class="confirmWithdraw" data-id="${w.id}">确认打款</button> <button class="rejectWithdraw" data-id="${w.id}">驳回</button></div>`).join('');
+        document.querySelectorAll('.confirmWithdraw').forEach(btn => { btn.addEventListener('click', () => { let wid = parseInt(btn.dataset.id); setWithdrawReqs(getWithdrawReqs().filter(x => x.id !== wid)); alert("打款完成"); render(); }); });
+        document.querySelectorAll('.rejectWithdraw').forEach(btn => { btn.addEventListener('click', () => { let wid = parseInt(btn.dataset.id); setWithdrawReqs(getWithdrawReqs().filter(x => x.id !== wid)); render(); }); });
+
+        let complaintDiv = document.getElementById('complaintListAdmin');
+        complaintDiv.innerHTML = complaints.map(c => `<div class="order-item">订单${c.oid.slice(-6)} 玩家${c.userName} 投诉打手${c.gamerName}<br>原因：${c.reason}<br><button class="resolveComplaint" data-id="${c.id}">✅ 标记已处理</button></div>`).join('');
+        document.querySelectorAll('.resolveComplaint').forEach(btn => { btn.addEventListener('click', () => { let cid = parseInt(btn.dataset.id); setComplaints(getComplaints().filter(x => x.id !== cid)); alert("已处理"); render(); }); });
+    }
+    render();
+})();
+</script>
+</body>
+</html>
