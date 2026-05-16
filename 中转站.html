@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>龙傲天俱乐部</title>
+    <title>龙傲天俱乐部 · 中转站</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -41,7 +41,14 @@
         }
         .btn:active { background: #e2b13b; transform: scale(0.98); }
         .btn-gray { background: #e2e8f0; color: #0f172a; }
-        .intro { text-align: left; background: #f8fafc; border-radius: 24px; padding: 20px; margin-top: 24px; border-left: 4px solid #f5c542; }
+        .intro {
+            text-align: left;
+            background: #f8fafc;
+            border-radius: 24px;
+            padding: 20px;
+            margin-top: 24px;
+            border-left: 4px solid #f5c542;
+        }
         .intro p, .intro li { color: #334155; line-height: 1.6; margin-bottom: 8px; }
         .intro ul { padding-left: 20px; }
         .footer { margin-top: 24px; font-size: 0.75rem; color: #94a3b8; }
@@ -54,10 +61,13 @@
         <div class="sub">游戏服务 · 中转站</div>
         <button class="btn" id="goToUser">🎮 玩家中心</button>
         <button class="btn btn-gray" id="goToGamer">🔫 打手端</button>
-        <button class="btn btn-gray" id="goToAdmin">👑 管理后台</button>
         <div class="intro">
             <h3>📌 支持游戏</h3>
-            <ul><li>✅ 和平精英 / 地铁逃生 / 百万撤离</li><li>✅ PUBG / 三角洲行动</li><li>✅ 吃丹修仙 / 各类手游</li></ul>
+            <ul>
+                <li>✅ 和平精英 / 地铁逃生 / 百万撤离</li>
+                <li>✅ PUBG / 三角洲行动</li>
+                <li>✅ 吃丹修仙 / 各类手游</li>
+            </ul>
             <p>玩家发布订单，打手接单赚钱，平台担保交易。</p>
         </div>
         <div class="footer">© 龙傲天俱乐部</div>
@@ -66,7 +76,86 @@
 <script>
     document.getElementById('goToUser').onclick = () => location.href = '用户.html';
     document.getElementById('goToGamer').onclick = () => location.href = '打手.html';
-    document.getElementById('goToAdmin').onclick = () => location.href = '管理员.html';
+</script><!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>龙傲天俱乐部 · 中转站</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #ffffff;
+            font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+            padding: 30px 20px;
+            color: #1e293b;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .container { max-width: 600px; margin: 0 auto; width: 100%; }
+        .card {
+            background: white;
+            border-radius: 32px;
+            padding: 40px 32px;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
+            border: 1px solid #e2e8f0;
+            text-align: center;
+        }
+        h1 { font-size: 2rem; font-weight: 700; color: #0f172a; margin-bottom: 12px; }
+        .sub { color: #f5c542; font-weight: 500; margin-bottom: 32px; }
+        .btn {
+            background: #f5c542;
+            color: #0f172a;
+            border: none;
+            padding: 16px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            border-radius: 60px;
+            cursor: pointer;
+            width: 100%;
+            margin: 12px 0;
+        }
+        .btn:active { background: #e2b13b; transform: scale(0.98); }
+        .btn-gray { background: #e2e8f0; color: #0f172a; }
+        .intro {
+            text-align: left;
+            background: #f8fafc;
+            border-radius: 24px;
+            padding: 20px;
+            margin-top: 24px;
+            border-left: 4px solid #f5c542;
+        }
+        .intro p, .intro li { color: #334155; line-height: 1.6; margin-bottom: 8px; }
+        .intro ul { padding-left: 20px; }
+        .footer { margin-top: 24px; font-size: 0.75rem; color: #94a3b8; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="card">
+        <h1>🐉 龙傲天俱乐部</h1>
+        <div class="sub">游戏服务 · 中转站</div>
+        <button class="btn" id="goToUser">🎮 玩家中心</button>
+        <button class="btn btn-gray" id="goToGamer">🔫 打手端</button>
+        <div class="intro">
+            <h3>📌 支持游戏</h3>
+            <ul>
+                <li>✅ 和平精英 / 地铁逃生 / 百万撤离</li>
+                <li>✅ PUBG / 三角洲行动</li>
+                <li>✅ 吃丹修仙 / 各类手游</li>
+            </ul>
+            <p>玩家发布订单，打手接单赚钱，平台担保交易。</p>
+        </div>
+        <div class="footer">© 龙傲天俱乐部</div>
+    </div>
+</div>
+<script>
+    document.getElementById('goToUser').onclick = () => location.href = '用户.html';
+    document.getElementById('goToGamer').onclick = () => location.href = '打手.html';
 </script>
+</body>
+</html>
 </body>
 </html>
