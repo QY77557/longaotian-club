@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>龙傲天俱乐部 · 打手端</title>
+    <style>
+        * { box-sizing: border-box; }
+        body { background: #ffffff; margin: 0; padding: 15px; font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; color: #1e293b; }
+        .container { max-width: 650px; margin: 0 auto; }
+        .card { background: white; border-radius: 24px; padding: 18px; margin-bottom: 18px; border: 1px solid #e2e8f0; }
+        h2, h3 { color: #0f172a; margin: 0 0 12px 0; border-left: 4px solid #f5c542; padding-left: 12px; }
+        input, select, textarea, button { width: 100%; padding: 12px; margin: 8px 0; border-radius: 40px; border: 1px solid #cbd5e1; font-size: 15px; background: white; color: #0f172a; }
+        button { background: #f5c542; font-weight: bold; border: none; cursor: pointer; }
+        .gray-btn { background: #e2e8f0; border: 1px solid #cbd5e1; }
+        .order-item { background: #f8fafc; border-radius: 20px; padding: 12px; margin-bottom: 12px; border-left: 4px solid #f5c542; }
+        .flex { display: flex; gap: 10px; flex-wrap: wrap; }
+        .announcement { background: #fef3c7; padding: 12px; border-radius: 16px; margin-bottom: 12px; font-size: 14px; }
+        .chat-box { max-height: 200px; overflow-y: auto; background: #f1f5f9; border-radius: 16px; padding: 10px; margin: 8px 0; }
+        .chat-msg { padding: 6px 10px; margin: 4px 0; border-radius: 20px; background: white; }
+        .chat-msg.user { background: #f5c542; color: #0f172a; text-align: right; }
+        .chat-msg.gamer { background: #e2e8f0; }
+        .verify-badge { display: inline-block; padding: 4px 12px; border-radius: 30px; font-size: 12px; font-weight: bold; }
+        .verified { background: #dcfce7; color: #166534; }
+        .pending { background: #fef3c7; color: #92400e; }
+        .rejected { background: #fee2e2; color: #991b1b; }
+        .not { background: #e2e8f0; color: #475569; }
+    </style>
+</head>
+<body>
+<div class="container" id="app"></div>
+<script>
+(function() {
+    // 初始化数据
+    if (!localStorage.getItem('club_users')) {
+        localStorage.setItem('club_users', JSON.stringify([
+            { uid: 'u1', username: '测试玩家', loginId: 'player', pwd: '111', balance: 500, banned: false, role: 'user' }
+        ]));
+    }
+    if (!localStorage.getItem('club_gamers')) {
+        localStorage.setItem('club_gamers', JSON.stringify([
+            { gid: 'g1', username: '墨渊', loginId: 'moyuan', pwd: '123456', skills: [{ type: '段位', target: '王牌', price: 80 }], balance: 0, banned: false, avgRating: 4.8, totalOrders: 0, approved: true, verifyStatus: 'verified', realName: '墨渊', idCard: '********' }
+        ]));
+    }
+    if (!localStorage.getItem('club_orders')) localStorage.setItem('club_orders', JSON.stringify([]));
+    if (!localStorage.getItem('club_admin')) localStorage.setItem('club_admin', JSON.stringify({ loginId: 'admin', pwd: 'admin123' }));
+    if (!localStorage.getItem('club_recharge_reqs')) localStorage.setItem('club_recharge_reqs', JSON.stringify([]));
+    if (!localStorage.getItem('club_withdraw_reqs')) localStorage.setItem('club_withdraw_reqs', JSON.stringify([]));
+    if (!localStorage.getItem('club_complaints')) localStorage.setItem('club_complaints', JSON.stringify([]));
+    if (!localStorage.getItem('club_announcements')) localStorage.setItem('club_announcements', JSON.stringify({ user: '', gamer: '' }));
+
+    function getGamers() { return JSON.parse(localStorage.getItem('club_gamers') || '[]'); }
+    function setGamers(v) { localStorage.setItem('club_gamers', JSON.stringify(v)); }
+    function getOrders() { return JSON.parse(localStorage.getItem('club_orders') || '[]'); }
+    function setOrders(v) { localStorage.setItem('club_orders', JSON.stringify(v)); }
+    function getWithdrawReqs() { return JSON.parse(localStorage.getItem('club_withdraw_reqs') || '[]'); }
+    function setWithdrawReqs(v) { localStorage.setItem('club_withdraw_reqs', JSON.stringify(v)); }
+    function getAnnouncements() { return JSON.parse(localStorage.getItem('club_announcements') || '{"user":"","gamer":""}'); }
+
+    // 根据身份证号计算年龄
+    function getAgeFromIdCard(idCard) {
+        if (!idCard || idCard.length !== 18) return null;
+        var birth = idCard.substring(6, 14);
+        var year = parseInt(birth.substring(0, 4));
+        var month = parseInt(birth.substring(4, 6));
+        var day = parseInt(birth.substring(6, 8));
+        var today = new Date();
+        var age = today.getFullYear() - year;
+        if (today.getMonth() + 1 < month || (today.getMonth() + 1 === month && today.getDate() < day)) age--;
+        return age;
+    }
+
+    let currentGamer = null;
+    function saveSession(gamer) { currentGamer = gamer; localStorage.setItem('club_gamer_session', JSON.stringify(gamer ? { gid: gamer.gid } : null)); render(); }
+    function getSession() { let raw = localStorage.getItem('club_gamer_session'); if (!raw) return null; let sess = JSON.parse(raw); if (!sess) return null; let gamers = getGamers(); return gamers.find(g => g.gid === sess.gid) || null; }
+
+    function render() {
+        let container = document.getElementById('app');
+        if (!container) return;
+        let g = getSession();
+        if (!g) {
+            container.innerHTML = `<div class="card"><h2>🔫 打手登录</h2><input id="loginId" placeholder="账号"><input id="loginPwd" type="password" placeholder="密码"><button id="loginBtn">登录</button><div style="margin-top:12px;">联系管理员获取打手账号</div></div>`;
+            document.getElementById('loginBtn')?.addEventListener('click', () => {
+                let id = document.getElementById('loginId').value, pwd = document.getElementById('loginPwd').value;
+                let gamers = getGamers();
+                let gamer = gamers.find(g => g.loginId === id && g.pwd === pwd);
+                if (gamer) saveSession(gamer);
+                else alert("账号或密码错误");
+            });
+            return;
+        }
+        currentGamer = g;
+        if (g.banned) { container.innerHTML = `<div class="card"><h2>⛔ 账号已封禁</h2><button id="logout">退出</button></div>`; document.getElementById('logout')?.addEventListener('click', () => { localStorage.removeItem('club_gamer_session'); render(); }); return; }
+        if (!g.approved) { container.innerHTML = `<div class="card"><h2>⏳ 账号审核中</h2><button id="logout">退出</button></div>`; document.getElementById('logout')?.addEventListener('click', () => { localStorage.removeItem('club_gamer_session'); render(); }); return; }
+
+        let announcements = getAnnouncements();
+        let myOrders = getOrders().filter(o => o.gamerId === g.gid);
+        let availableOrders = getOrders().filter(o => (o.status === 'waiting' || o.status === 'waiting_assign') && (!o.gamerId || o.gamerId === g.gid));
+        
+        // 认证状态
+        let verifyStatus = g.verifyStatus || 'not';
+        let canAcceptOrders = (verifyStatus === 'verified');
+        let verifyBadge = '';
+        if (verifyStatus === 'verified') verifyBadge = '<span class="verify-badge verified">✅ 已实名认证</span>';
+        else if (verifyStatus === 'pending') verifyBadge = '<span class="verify-badge pending">⏳ 实名审核中</span>';
+        else if (verifyStatus === 'rejected') verifyBadge = '<span class="verify-badge rejected">❌ 实名被拒，请重新提交</span>';
+        else verifyBadge = '<span class="verify-badge not">⚠️ 未实名认证（需认证才能接单）</span>';
+        
+        let html = `
+            <div class="card">
+                ${announcements.gamer ? `<div class="announcement">📢 ${announcements.gamer}</div>` : ''}
+                <h2>🔫 ${g.username}</h2>
+                <div>💰 余额：${g.balance} 元</div>
+                <div>⭐ 评分：${g.avgRating} | 单量：${g.totalOrders}</div>
+                <div style="margin: 10px 0;">${verifyBadge}</div>
+                <div class="flex"><button id="logoutBtn" class="gray-btn">切换账号</button><button id="withdrawBtn" class="gray-btn">提现</button></div>
+            </div>
+            ${verifyStatus !== 'verified' ? `
+            <div class="card">
+                <h3>📋 实名认证（需满18岁）</h3>
+                ${verifyStatus === 'pending' ? '<p style="color:#92400e;">⏳ 认证信息审核中，请耐心等待</p>' : ''}
+                ${verifyStatus === 'rejected' ? '<p style="color:#991b1b;">❌ 认证被拒绝，请重新提交真实信息</p>' : ''}
+                ${verifyStatus === 'not' ? `
+                    <input type="text" id="realName" placeholder="真实姓名">
+                    <input type="text" id="idCard" placeholder="身份证号（18位）">
+                    <button id="submitVerifyBtn">提交实名认证</button>
+                    <div style="font-size:12px; color:#64748b; margin-top:8px;">⚠️ 必须年满18周岁才能成为打手</div>
+                ` : ''}
+            </div>
+            ` : ''}
+            <div class="card"><h3>🛠️ 技能报价</h3>
+                <div id="skillsList"></div>
+                <div class="flex"><select id="skillType"><option value="段位">段位</option><option value="物资">物资</option><option value="撤离">撤离</option></select><input id="skillTarget" placeholder="目标"><input id="skillPrice" placeholder="价格"></div>
+                <button id="addSkill">添加技能</button>
+            </div>
+            <div class="card"><h3>📢 可接订单</h3><div id="availableOrders"></div></div>
+            <div class="card"><h3>📋 我的接单</h3><div id="myOrdersList"></div></div>
+        `;
+        container.innerHTML = html;
+        
+        document.getElementById('logoutBtn')?.addEventListener('click', () => { localStorage.removeItem('club_gamer_session'); render(); });
+        document.getElementById('withdrawBtn')?.addEventListener('click', () => {
+            let amt = prompt("提现金额"), acc = prompt("支付宝账号");
+            if (amt && acc) { let reqs = getWithdrawReqs(); reqs.push({ id: Date.now(), userId: g.gid, amount: parseInt(amt), account: acc, status: 'pending', type: 'gamer' }); setWithdrawReqs(reqs); alert("提现申请已提交"); render(); }
+        });
+        
+        // 提交实名认证
+        document.getElementById('submitVerifyBtn')?.addEventListener('click', () => {
+            let realName = document.getElementById('realName').value.trim();
+            let idCard = document.getElementById('idCard').value.trim();
+            if (!realName || !idCard) { alert("请填写真实姓名和身份证号"); return; }
+            if (idCard.length !== 18) { alert("身份证号必须为18位"); return; }
+            let age = getAgeFromIdCard(idCard);
+            if (age === null) { alert("身份证号格式错误"); return; }
+            if (age < 18) { alert(`你当前年龄为 ${age} 岁，未满18周岁无法成为打手`); return; }
+            let gamers = getGamers();
+            let idx = gamers.findIndex(gg => gg.gid === g.gid);
+            if (idx !== -1) {
+                gamers[idx].realName = realName;
+                gamers[idx].idCard = idCard.substring(0, 10) + '****';
+                gamers[idx].verifyStatus = 'pending';
+                setGamers(gamers);
+            }
+            alert(`实名认证已提交，等待管理员审核。你已满 ${age} 岁，符合要求。`);
+            render();
+        });
+        
+        // 技能
+        let skillsDiv = document.getElementById('skillsList');
+        skillsDiv.innerHTML = g.skills.map((s, idx) => `<div>${s.type}·${s.target} ¥${s.price} <button class="delSkill" data-idx="${idx}">删除</button></div>`).join('');
+        document.querySelectorAll('.delSkill').forEach(btn => {
+            btn.addEventListener('click', () => {
+                let idx = parseInt(btn.dataset.idx);
+                g.skills.splice(idx, 1);
+                let gamers = getGamers();
+                let i = gamers.findIndex(gg => gg.gid === g.gid);
+                if (i !== -1) gamers[i] = g;
+                setGamers(gamers);
+                render();
+            });
+        });
+        document.getElementById('addSkill')?.addEventListener('click', () => {
+            let type = document.getElementById('skillType').value, target = document.getElementById('skillTarget').value, price = parseInt(document.getElementById('skillPrice').value);
+            if (type && target && price) {
+                g.skills.push({ type, target, price });
+                let gamers = getGamers();
+                let i = gamers.findIndex(gg => gg.gid === g.gid);
+                if (i !== -1) gamers[i] = g;
+                setGamers(gamers);
+                render();
+            } else alert("填完整");
+        });
+        
+        // 可接订单（只有实名认证通过才能接单）
+        let availDiv = document.getElementById('availableOrders');
+        if (availDiv) {
+            if (!canAcceptOrders && availableOrders.length > 0) {
+                availDiv.innerHTML = `<div class="order-item" style="background:#fee2e2;">⚠️ 请先完成实名认证（满18岁）才能接单</div>`;
+            } else if (availableOrders.length === 0) {
+                availDiv.innerHTML = "<div>暂无订单</div>";
+            } else {
+                availDiv.innerHTML = availableOrders.map(o => `
+                    <div class="order-item">
+                        <div><b>${o.game || '游戏'}</b> | ${o.userName} 出价 ¥${o.price}</div>
+                        <div>需求：${o.description}</div>
+                        <div>类型：${o.gamerId ? '🎯 专属单' : '📢 普通单'}</div>
+                        <button class="acceptOrder" data-oid="${o.oid}">接单</button>
+                    </div>
+                `).join('');
+                document.querySelectorAll('.acceptOrder').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        let oid = btn.dataset.oid;
+                        let orders = getOrders();
+                        let ord = orders.find(x => x.oid === oid);
+                        if (ord && (ord.status === 'waiting' || ord.status === 'waiting_assign')) {
+                            ord.status = 'accepted';
+                            ord.gamerId = g.gid;
+                            ord.gamerName = g.username;
+                            setOrders(orders);
+                            alert("接单成功！请与用户联系获取游戏ID");
+                            render();
+                        }
+                    });
+                });
+            }
+        }
+        
+        // 我的接单
+        let myDiv = document.getElementById('myOrdersList');
+        if (myDiv) {
+            if (myOrders.length === 0) myDiv.innerHTML = "<div>暂无接单</div>";
+            else {
+                myDiv.innerHTML = myOrders.map(o => {
+                    let statusText = o.status === 'accepted' ? '✅ 已接单，等待用户发送ID' : o.status === 'in_progress' ? '⚙️ 进行中' : o.status === 'completed' ? '✅ 已完成' : o.status;
+                    return `<div class="order-item" data-oid="${o.oid}">
+                        <b>${o.game || '游戏'}</b> | ¥${o.price}<br>
+                        玩家：${o.userName}<br>
+                        需求：${o.description}<br>
+                        状态：${statusText}<br>
+                        <div class="chat-box" id="chat-${o.oid}">${(o.messages || []).map(m => `<div class="chat-msg ${m.from === 'gamer' ? 'gamer' : 'user'}">${m.from === 'gamer' ? '我' : o.userName}：${m.content}</div>`).join('')}</div>
+                        <div class="flex"><input type="text" id="msgInput-${o.oid}" placeholder="回复游戏ID/联系方式..."><button class="sendMsgBtn" data-oid="${o.oid}">发送</button></div>
+                        ${o.status === 'in_progress' ? `<button class="finishOrderBtn" data-oid="${o.oid}">✅ 标记完成</button>` : ''}
+                    </div>`;
+                }).join('');
+                document.querySelectorAll('.sendMsgBtn').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        let oid = btn.dataset.oid;
+                        let input = document.getElementById(`msgInput-${oid}`);
+                        let msg = input.value.trim();
+                        if (!msg) return;
+                        let ordersArr = getOrders();
+                        let ord = ordersArr.find(x => x.oid === oid);
+                        if (ord) {
+                            if (!ord.messages) ord.messages = [];
+                            ord.messages.push({ from: 'gamer', content: msg, time: Date.now() });
+                            setOrders(ordersArr);
+                            input.value = '';
+                            render();
+                        }
+                    });
+                });
+                document.querySelectorAll('.finishOrderBtn').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        let oid = btn.dataset.oid;
+                        let ordersArr = getOrders();
+                        let ord = ordersArr.find(x => x.oid === oid);
+                        if (ord && ord.status === 'in_progress') {
+                            ord.status = 'completed';
+                            setOrders(ordersArr);
+                            alert("已标记完成，等待用户确认结算");
+                            render();
+                        }
+                    });
+                });
+            }
+        }
+    }
+    render();
+})();
+</script>
+</body>
+</html>
