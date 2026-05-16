@@ -22,7 +22,6 @@
         .log-list { max-height: 300px; overflow-y: auto; background: #f8fafc; padding: 10px; border-radius: 16px; font-size: 12px; }
         .log-item { padding: 6px 0; border-bottom: 1px solid #e2e8f0; font-family: monospace; }
         .order-item { background: #f8fafc; border-radius: 16px; padding: 10px; margin-bottom: 8px; border-left: 3px solid #f59e0b; }
-        canvas { max-height: 250px; width: 100%; }
     </style>
 </head>
 <body>
@@ -121,8 +120,8 @@ function render() {
     
     let html = `
         <div class="grid">
-            <div class="card"><h2>📊 数据看板</h2><div>👥 玩家：${users.length} | 🔫 打手：${gamers.length}</div><div>📦 订单：${orders.length} | 💰 装备：${equipments.length}</div><div>💰 总余额：${totalBalance}元 | ⏳ 待审：${gamers.filter(g=>g.verifyStatus==='pending').length}</div><canvas id="statsChart" style="max-height:180px;"></canvas></div>
-            <div class="card"><h3>⚙️ 系统设置</h3><label>平台抽成(%)</label><input id="fee" value="${settings.platformFee||10}" type="number"><label>玩家最低提现</label><input id="minUser" value="${settings.minWithdrawUser||20}" type="number"><label>打手最低提现</label><input id="minGamer" value="${settings.minWithdrawGamer||25}" type="number"><label>超时取消(小时)</label><input id="cancelHours" value="${settings.autoCancelHours||24}" type="number"><label>超时确认(小时)</label><input id="confirmHours" value="${settings.autoConfirmHours||72}" type="number"><label>防刷单限制(单/单位时间)</label><input id="antiLimit" value="${settings.antiBrushLimit||5}" type="number"><label>防刷单位时间(分钟)</label><input id="antiMinutes" value="${settings.antiBrushMinutes||10}" type="number"><label>装备交易手续费(%)</label><input id="equipFee" value="${settings.equipmentFee||5}" type="number"><button id="saveSettings">保存设置</button></div>
+            <div class="card"><h2>📊 数据看板</h2><div>👥 玩家：${users.length} | 🔫 打手：${gamers.length}</div><div>📦 订单：${orders.length} | 💰 装备：${equipments.length}</div><div>💰 总余额：${totalBalance}元</div><div>⏳ 待审实名：${gamers.filter(g=>g.verifyStatus==='pending').length} | 📝 充值：${rechargeReqs.length} | 💸 提现：${withdrawReqs.length} | ⚠️ 投诉：${complaints.length}</div></div>
+            <div class="card"><h3>⚙️ 系统设置</h3><label>平台抽成(%)</label><input id="fee" value="${settings.platformFee||10}" type="number"><label>玩家最低提现(元)</label><input id="minUser" value="${settings.minWithdrawUser||20}" type="number"><label>打手最低提现(元)</label><input id="minGamer" value="${settings.minWithdrawGamer||25}" type="number"><label>超时取消(小时)</label><input id="cancelHours" value="${settings.autoCancelHours||24}" type="number"><label>超时确认(小时)</label><input id="confirmHours" value="${settings.autoConfirmHours||72}" type="number"><label>防刷单限制(单/单位时间)</label><input id="antiLimit" value="${settings.antiBrushLimit||5}" type="number"><label>防刷单位时间(分钟)</label><input id="antiMinutes" value="${settings.antiBrushMinutes||10}" type="number"><label>装备交易手续费(%)</label><input id="equipFee" value="${settings.equipmentFee||5}" type="number"><button id="saveSettings">保存设置</button></div>
             <div class="card"><h3>📢 公告/广告</h3><textarea id="userAnnounce" rows="2" placeholder="用户公告">${announcements.user||''}</textarea><button id="sendUserAnnounce">发送用户公告</button><textarea id="gamerAnnounce" rows="2" placeholder="打手公告">${announcements.gamer||''}</textarea><button id="sendGamerAnnounce">发送打手公告</button><select id="adType"><option value="text" ${announcements.ad?.type==='text'?'selected':''}>文字广告</option><option value="image" ${announcements.ad?.type==='image'?'selected':''}>图片广告</option></select><input id="adContent" placeholder="广告内容" value="${announcements.ad?.content||''}"><input id="adLink" placeholder="广告链接" value="${announcements.ad?.link||''}"><button id="saveAd">保存广告</button></div>
             <div class="card"><h3>👥 用户/打手管理</h3><div class="flex"><input id="newUserName" placeholder="昵称"><input id="newUserLogin" placeholder="账号"><input id="newUserPwd" placeholder="密码"></div><button id="createUser">创建玩家</button><div class="flex"><input id="newGamerName" placeholder="昵称"><input id="newGamerLogin" placeholder="账号"><input id="newGamerPwd" placeholder="密码"></div><button id="createGamer">创建打手</button></div>
             <div class="card"><h3>👥 玩家列表</h3><div id="userList" style="max-height:300px;overflow-y:auto;"></div></div>
@@ -135,12 +134,6 @@ function render() {
         </div>
     `;
     container.innerHTML = html;
-    
-    // 简单图表
-    let ctx = document.getElementById('statsChart')?.getContext('2d');
-    if(ctx && typeof Chart !== 'undefined') {
-        new Chart(ctx, { type:'bar', data:{ labels:['玩家','打手','订单'], datasets:[{ label:'数量', data:[users.length, gamers.length, orders.length], backgroundColor:'#f59e0b' }] } });
-    }
     
     document.getElementById('saveSettings')?.addEventListener('click', () => { setSettings({ platformFee: parseInt(document.getElementById('fee').value), minWithdrawUser: parseInt(document.getElementById('minUser').value), minWithdrawGamer: parseInt(document.getElementById('minGamer').value), autoCancelHours: parseInt(document.getElementById('cancelHours').value), autoConfirmHours: parseInt(document.getElementById('confirmHours').value), antiBrushLimit: parseInt(document.getElementById('antiLimit').value), antiBrushMinutes: parseInt(document.getElementById('antiMinutes').value), equipmentFee: parseInt(document.getElementById('equipFee').value) }); alert("设置已保存"); });
     document.getElementById('sendUserAnnounce')?.addEventListener('click', () => { let ann = getAnnouncements(); ann.user = document.getElementById('userAnnounce').value; setAnnouncements(ann); alert("已发送"); });
