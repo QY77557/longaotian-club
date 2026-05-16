@@ -1,0 +1,922 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>龙傲天俱乐部 · 玩家中心</title>
+    <style>
+        * { box-sizing: border-box; }
+        body { background: #f2f4f8; margin: 0; padding: 15px; font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; color: #1e293b; }
+        .container { max-width: 650px; margin: 0 auto; }
+        .card { background: white; border-radius: 24px; padding: 18px; margin-bottom: 18px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; }
+        h2, h3 { color: #0f172a; margin: 0 0 12px 0; border-left: 4px solid #f5c542; padding-left: 12px; }
+        input, select, textarea, button { width: 100%; padding: 12px; margin: 8px 0; border-radius: 40px; border: 1px solid #cbd5e1; font-size: 15px; background: white; color: #0f172a; }
+        button { background: #f5c542; color: #0f172a; font-weight: bold; border: none; cursor: pointer; }
+        .gray-btn { background: #e2e8f0; border: 1px solid #cbd5e1; }
+        .balance { font-size: 28px; font-weight: bold; color: #f5c542; }
+        .order-item, .equip-item { background: #f8fafc; border-radius: 20px; padding: 12px; margin-bottom: 12px; border-left: 4px solid #f5c542; }
+        .equip-img { max-width: 100%; border-radius: 16px; margin-top: 8px; border: 1px solid #e2e8f0; }
+        .flex { display: flex; gap: 10px; flex-wrap: wrap; }
+        .announcement { background: #fef3c7; border-left: 4px solid #f59e0b; padding: 12px; border-radius: 16px; margin-bottom: 12px; font-size: 14px; }
+    </style>
+</head>
+<body>
+<div class="container" id="app"></div>
+<script>
+(function() {
+    if (!localStorage.getItem('club_users')) localStorage.setItem('club_users', JSON.stringify([]));
+    if (!localStorage.getItem('club_gamers')) localStorage.setItem('club_gamers', JSON.stringify([]));
+    if (!localStorage.getItem('club_orders')) localStorage.setItem('club_orders', JSON.stringify([]));
+    if (!localStorage.getItem('club_equipment')) localStorage.setItem('club_equipment', JSON.stringify([]));
+    if (!localStorage.getItem('club_admin')) localStorage.setItem('club_admin', JSON.stringify({ loginId: 'admin', pwd: 'admin123' }));
+    if (!localStorage.getItem('club_recharge_reqs')) localStorage.setItem('club_recharge_reqs', JSON.stringify([]));
+    if (!localStorage.getItem('club_withdraw_reqs')) localStorage.setItem('club_withdraw_reqs', JSON.stringify([]));
+    if (!localStorage.getItem('club_complaints')) localStorage.setItem('club_complaints', JSON.stringify([]));
+    if (!localStorage.getItem('club_announcements')) localStorage.setItem('club_announcements', JSON.stringify({ user: '', gamer: '' }));
+
+    function getUsers() { return JSON.parse(localStorage.getItem('club_users') || '[]'); }
+    function setUsers(v) { localStorage.setItem('club_users', JSON.stringify(v)); }
+    function getGamers() { return JSON.parse(localStorage.getItem('club_gamers') || '[]'); }
+    function setGamers(v) { localStorage.setItem('club_gamers', JSON.stringify(v)); }
+    function getOrders() { return JSON.parse(localStorage.getItem('club_orders') || '[]'); }
+    function setOrders(v) { localStorage.setItem('club_orders', JSON.stringify(v)); }
+    function getEquipment() { return JSON.parse(localStorage.getItem('club_equipment') || '[]'); }
+    function setEquipment(v) { localStorage.setItem('club_equipment', JSON.stringify(v)); }
+    function getRechargeReqs() { return JSON.parse(localStorage.getItem('club_recharge_reqs') || '[]'); }
+    function setRechargeReqs(v) { localStorage.setItem('club_recharge_reqs', JSON.stringify(v)); }
+    function getWithdrawReqs() { return JSON.parse(localStorage.getItem('club_withdraw_reqs') || '[]'); }
+    function setWithdrawReqs(v) { localStorage.setItem('club_withdraw_reqs', JSON.stringify(v)); }
+    function getComplaints() { return JSON.parse(localStorage.getItem('club_complaints') || '[]'); }
+    function setComplaints(v) { localStorage.setItem('club_complaints', JSON.stringify(v)); }
+    function getAnnouncements() { return JSON.parse(localStorage.getItem('club_announcements') || '{"user":"","gamer":""}'); }
+    function setAnnouncements(v) { localStorage.setItem('club_announcements', JSON.stringify(v)); }
+
+    let currentUser = null;
+
+    function saveSession(user) {
+        currentUser = user;
+        localStorage.setItem('club_session', JSON.stringify(user ? { uid: user.uid, role: user.role } : null));
+        renderApp();
+    }
+
+    function getSession() {
+        let raw = localStorage.getItem('club_session');
+        if (!raw) return null;
+        let sess = JSON.parse(raw);
+        if (!sess) return null;
+        if (sess.role === 'user') {
+            let users = getUsers();
+            return users.find(u => u.uid === sess.uid) || null;
+        } else if (sess.role === 'gamer') {
+            let gamers = getGamers();
+            return gamers.find(g => g.gid === sess.uid) || null;
+        }
+        return null;
+    }
+
+    function changeUserBalance(uid, amount) {
+        let users = getUsers();
+        let u = users.find(x => x.uid === uid);
+        if (u) { u.balance += amount; setUsers(users); }
+        if (currentUser && currentUser.uid === uid) currentUser = u;
+        renderApp();
+    }
+
+    function changeGamerBalance(gid, amount) {
+        let gamers = getGamers();
+        let g = gamers.find(x => x.gid === gid);
+        if (g) { g.balance += amount; setGamers(gamers); }
+        if (currentUser && currentUser.gid === gid) currentUser = g;
+        renderApp();
+    }
+
+    function autoPrice(desc, seg, mat) {
+        let base = 30;
+        if (desc.includes('王牌')) base += 50;
+        if (desc.includes('皇冠')) base += 30;
+        if (desc.includes('星钻')) base += 15;
+        if (desc.includes('热成像')) base += 40;
+        if (desc.includes('六套')) base += 60;
+        if (seg === '王牌') base += 50;
+        else if (seg === '皇冠') base += 30;
+        else if (seg === '星钻') base += 15;
+        if (mat === '热成像') base += 40;
+        else if (mat === '六套') base += 60;
+        return base;
+    }
+
+    function renderApp() {
+        let container = document.getElementById('app');
+        if (!container) return;
+        let sess = getSession();
+        if (!sess) {
+            renderLogin();
+            return;
+        }
+        currentUser = sess;
+        if (currentUser.banned) {
+            container.innerHTML = `<div class="card"><h2>⛔ 账号已被封禁</h2><p>联系管理员申诉</p></div>`;
+            return;
+        }
+        if (currentUser.role === 'user') renderUserPanel();
+        else if (currentUser.role === 'gamer') renderGamerPanel();
+        else renderAdminPanel();
+    }
+
+    function renderLogin() {
+        let html = `
+            <div class="card">
+                <h2>🎮 和平精英俱乐部</h2>
+                <h3>登录</h3>
+                <input type="text" id="loginId" placeholder="账号">
+                <input type="password" id="loginPwd" placeholder="密码">
+                <button id="loginBtn">登录</button>
+                <hr>
+                <h3>注册普通玩家</h3>
+                <input type="text" id="regName" placeholder="昵称">
+                <input type="text" id="regLoginId" placeholder="账号">
+                <input type="password" id="regPwd" placeholder="密码">
+                <button id="regUserBtn">注册玩家</button>
+                <div style="margin-top:12px; font-size:12px; color:#475569;">打手账号由管理员创建，请联系管理员</div>
+            </div>
+        `;
+        document.getElementById('app').innerHTML = html;
+        document.getElementById('loginBtn')?.addEventListener('click', () => {
+            let id = document.getElementById('loginId').value;
+            let pwd = document.getElementById('loginPwd').value;
+            let users = getUsers();
+            let user = users.find(u => u.loginId === id && u.pwd === pwd);
+            if (user) { saveSession({ ...user, role: 'user' }); return; }
+            let gamers = getGamers();
+            let gamer = gamers.find(g => g.loginId === id && g.pwd === pwd);
+            if (gamer) { saveSession({ ...gamer, role: 'gamer', uid: gamer.gid }); return; }
+            let admin = JSON.parse(localStorage.getItem('club_admin'));
+            if (id === admin.loginId && pwd === admin.pwd) { saveSession({ uid: 'admin', role: 'admin' }); return; }
+            alert("账号或密码错误");
+        });
+        document.getElementById('regUserBtn')?.addEventListener('click', () => {
+            let name = document.getElementById('regName').value;
+            let lid = document.getElementById('regLoginId').value;
+            let pwd = document.getElementById('regPwd').value;
+            if (!name || !lid || !pwd) { alert("填完整"); return; }
+            let users = getUsers();
+            if (users.find(u => u.loginId === lid)) { alert("账号已存在"); return; }
+            let newUser = { uid: 'u' + Date.now(), username: name, loginId: lid, pwd: pwd, phone: '', role: 'user', balance: 0, banned: false, regTime: Date.now() };
+            users.push(newUser);
+            setUsers(users);
+            saveSession({ ...newUser, role: 'user' });
+        });
+    }
+
+    function renderUserPanel() {
+        let u = currentUser;
+        let announcements = getAnnouncements();
+        let orders = getOrders().filter(o => o.userId === u.uid);
+        let gamers = getGamers().filter(g => !g.banned && g.approved);
+        let equipments = getEquipment().filter(e => e.status === '出售' && e.sellerId !== u.uid);
+        let myEquipments = getEquipment().filter(e => e.sellerId === u.uid);
+        let complaints = getComplaints().filter(c => c.userId === u.uid);
+        let html = `
+            <div class="card">
+                ${announcements.user ? `<div class="announcement">📢 平台公告：${announcements.user}</div>` : ''}
+                <h2>🎮 玩家：${u.username}</h2>
+                <div>💰 余额：<span class="balance">${u.balance}</span> 元</div>
+                <div class="flex">
+                    <button id="logoutBtn" class="gray-btn">退出</button>
+                    <button id="rechargeBtn" class="gray-btn">充值申请</button>
+                    <button id="withdrawBtn" class="gray-btn">提现申请</button>
+                </div>
+            </div>
+            <div class="card">
+                <h3>📝 发布点单（找打手）</h3>
+                <textarea id="orderDesc" rows="2" placeholder="需求描述，例如：带打王牌段位，需热成像..."></textarea>
+                <input type="text" id="targetSegment" placeholder="目标段位（选填）">
+                <input type="text" id="targetMaterial" placeholder="目标物资（选填）">
+                <div id="autoPriceShow" style="background:#f1f5f9; border-radius:30px; padding:8px; margin:8px 0;">💰 预估价格：自动计算</div>
+                <button id="publishOrderBtn">发布点单（自动计价）</button>
+            </div>
+            <div class="card">
+                <h3>🔥 打手列表</h3>
+                <div id="gamerList"></div>
+            </div>
+            <div class="card">
+                <h3>📋 我的点单记录</h3>
+                <div id="myOrders"></div>
+            </div>
+            <div class="card">
+                <h3>🛒 装备市场 · 出售装备</h3>
+                <input type="text" id="equipTitle" placeholder="装备名称（如：M416 特效枪皮）">
+                <input type="number" id="equipPrice" placeholder="价格（元）">
+                <input type="text" id="equipImg" placeholder="图片链接（URL）">
+                <input type="text" id="equipContact" placeholder="联系方式（微信/QQ）">
+                <textarea id="equipDesc" rows="2" placeholder="装备描述，成色等"></textarea>
+                <button id="publishEquipBtn">上架装备</button>
+            </div>
+            <div class="card">
+                <h3>🏪 装备市场 · 购买装备</h3>
+                <div id="equipList"></div>
+            </div>
+            <div class="card">
+                <h3>📦 我发布的装备</h3>
+                <div id="myEquipList"></div>
+            </div>
+            <div class="card">
+                <h3>📞 客服与投诉</h3>
+                <div style="background:#f1f5f9; border-radius:20px; padding:12px; margin-bottom:12px;">
+                    <p><strong>📧 客服邮箱：</strong> service@jlb.com</p>
+                    <p><strong>💬 客服微信：</strong> kefu_888</p>
+                    <p><strong>⏰ 工作时间：</strong> 9:00-23:00</p>
+                </div>
+                <h4>投诉打手</h4>
+                <select id="complaintOrderSelect"><option value="">-- 选择订单 --</option></select>
+                <textarea id="complaintReason" rows="2" placeholder="投诉原因（如：打手跑单、态度差、技术不行等）"></textarea>
+                <button id="submitComplaintBtn">提交投诉</button>
+                <h4>我的投诉记录</h4>
+                <div id="myComplaints"></div>
+            </div>
+        `;
+        document.getElementById('app').innerHTML = html;
+
+        // 填充投诉订单下拉框
+        let completedOrders = orders.filter(o => o.status === 'completed');
+        let selectEl = document.getElementById('complaintOrderSelect');
+        if (selectEl) {
+            selectEl.innerHTML = '<option value="">-- 选择订单 --</option>' + completedOrders.map(o => `<option value="${o.oid}">订单${o.oid.slice(-6)} - ${o.description} - ¥${o.price}</option>`).join('');
+        }
+
+        document.getElementById('logoutBtn')?.addEventListener('click', () => { localStorage.removeItem('club_session'); renderApp(); });
+        document.getElementById('rechargeBtn')?.addEventListener('click', () => {
+            let amt = prompt("充值金额（元）");
+            if (amt && !isNaN(amt)) {
+                let reqs = getRechargeReqs();
+                reqs.push({ id: Date.now(), userId: u.uid, amount: parseInt(amt), status: 'pending', type: 'user' });
+                setRechargeReqs(reqs);
+                alert("充值申请已提交，管理员审核后到账");
+            }
+        });
+        document.getElementById('withdrawBtn')?.addEventListener('click', () => {
+            let amt = prompt("提现金额");
+            let acc = prompt("支付宝/微信账号");
+            if (amt && acc) {
+                let reqs = getWithdrawReqs();
+                reqs.push({ id: Date.now(), userId: u.uid, amount: parseInt(amt), account: acc, status: 'pending', type: 'user' });
+                setWithdrawReqs(reqs);
+                alert("提现申请已提交");
+            }
+        });
+
+        // 提交投诉
+        document.getElementById('submitComplaintBtn')?.addEventListener('click', () => {
+            let oid = document.getElementById('complaintOrderSelect').value;
+            let reason = document.getElementById('complaintReason').value;
+            if (!oid) { alert("请选择订单"); return; }
+            if (!reason) { alert("请填写投诉原因"); return; }
+            let order = getOrders().find(o => o.oid === oid);
+            if (!order) { alert("订单不存在"); return; }
+            let complaints = getComplaints();
+            complaints.push({
+                id: Date.now(),
+                oid: oid,
+                userId: u.uid,
+                userName: u.username,
+                gamerId: order.gamerId,
+                gamerName: order.gamerName,
+                reason: reason,
+                status: 'pending',
+                createTime: Date.now()
+            });
+            setComplaints(complaints);
+            alert("投诉已提交，客服会尽快联系你处理");
+            document.getElementById('complaintReason').value = '';
+            renderApp();
+        });
+
+        // 显示我的投诉记录
+        let complaintsDiv = document.getElementById('myComplaints');
+        if (complaintsDiv) {
+            if (complaints.length === 0) complaintsDiv.innerHTML = "<div>暂无投诉记录</div>";
+            else {
+                complaintsDiv.innerHTML = complaints.map(c => `
+                    <div class="order-item complaint-item">
+                        <div>订单号：${c.oid.slice(-6)} | 打手：${c.gamerName}</div>
+                        <div>投诉原因：${c.reason}</div>
+                        <div>状态：${c.status === 'pending' ? '⏳ 处理中，请等待联系' : c.status === 'refunded' ? '✅ 已退款并封禁打手' : c.status}</div>
+                    </div>
+                `).join('');
+            }
+        }
+
+        // 点单自动计价
+        let desc = document.getElementById('orderDesc');
+        let seg = document.getElementById('targetSegment');
+        let mat = document.getElementById('targetMaterial');
+        function updatePrice() {
+            let price = autoPrice(desc ? desc.value : '', seg ? seg.value : '', mat ? mat.value : '');
+            let el = document.getElementById('autoPriceShow');
+            if (el) el.innerHTML = `💰 预估价格：${price} 元（系统根据难度自动计算）`;
+        }
+        desc?.addEventListener('input', updatePrice);
+        seg?.addEventListener('input', updatePrice);
+        mat?.addEventListener('input', updatePrice);
+        updatePrice();
+
+        document.getElementById('publishOrderBtn')?.addEventListener('click', () => {
+            let d = desc.value;
+            let s = seg.value;
+            let m = mat.value;
+            if (!d) { alert("请填写需求"); return; }
+            let price = autoPrice(d, s, m);
+            let ordersArr = getOrders();
+            ordersArr.push({
+                oid: 'o' + Date.now(),
+                userId: u.uid,
+                userName: u.username,
+                description: d,
+                targetSegment: s,
+                targetMaterial: m,
+                price: price,
+                status: 'waiting',
+                gamerId: null,
+                gamerName: null,
+                createTime: Date.now(),
+                completeTime: null,
+                review: null
+            });
+            setOrders(ordersArr);
+            alert("点单已发布，等待打手接单");
+            renderApp();
+        });
+
+        let gamerDiv = document.getElementById('gamerList');
+        if (gamerDiv) {
+            if (gamers.length === 0) gamerDiv.innerHTML = "<div>暂无打手</div>";
+            else {
+                gamerDiv.innerHTML = gamers.map(g => `
+                    <div class="order-item">
+                        <b>${g.username}</b> ⭐ ${g.avgRating} (${g.totalOrders}单)<br>
+                        技能：${g.skills.length ? g.skills.map(s => `${s.type}:${s.target} ¥${s.price}`).join(', ') : '未设置'}<br>
+                        <button class="selectGamer" data-gid="${g.gid}" data-gname="${g.username}">指定该打手下单</button>
+                    </div>
+                `).join('');
+                document.querySelectorAll('.selectGamer').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        let gid = btn.dataset.gid;
+                        let gname = btn.dataset.gname;
+                        let price = prompt("你愿意支付的价格（元）", "50");
+                        if (price && !isNaN(price)) {
+                            let dd = prompt("简单描述需求", "打一把匹配");
+                            if (dd) {
+                                let ordersArr = getOrders();
+                                ordersArr.push({
+                                    oid: 'o' + Date.now(),
+                                    userId: u.uid,
+                                    userName: u.username,
+                                    description: dd,
+                                    targetSegment: '',
+                                    targetMaterial: '',
+                                    price: parseInt(price),
+                                    status: 'waiting',
+                                    gamerId: gid,
+                                    gamerName: gname,
+                                    createTime: Date.now(),
+                                    completeTime: null,
+                                    review: null
+                                });
+                                setOrders(ordersArr);
+                                alert(`已向 ${gname} 发起点单，等待对方接单`);
+                                renderApp();
+                            }
+                        }
+                    });
+                });
+            }
+        }
+
+        let orderDiv = document.getElementById('myOrders');
+        if (orderDiv) {
+            if (orders.length === 0) orderDiv.innerHTML = "<div>暂无点单</div>";
+            else {
+                orderDiv.innerHTML = orders.map(o => `
+                    <div class="order-item">
+                        <div><b>订单号：${o.oid.slice(-6)}</b> 金额：¥${o.price}</div>
+                        <div>需求：${o.description}</div>
+                        <div>状态：${o.status === 'waiting' ? '等待接单' : o.status === 'accepted' ? '打手已接单，等待开始' : o.status === 'in_progress' ? '进行中' : o.status === 'completed' ? '已完成' : '已取消'}</div>
+                        ${o.gamerName ? `<div>打手：${o.gamerName}</div>` : ''}
+                        ${o.status === 'accepted' ? `<button class="startOrder" data-oid="${o.oid}">确认开始</button>` : ''}
+                        ${o.status === 'in_progress' ? `<button class="completeOrder" data-oid="${o.oid}">确认完成</button>` : ''}
+                        ${o.status === 'waiting' ? `<button class="cancelOrder" data-oid="${o.oid}">取消点单</button>` : ''}
+                        ${o.status === 'completed' && !o.review ? `<textarea id="review_${o.oid}" placeholder="评价打手..."></textarea><button class="submitReview" data-oid="${o.oid}">提交评价</button>` : ''}
+                    </div>
+                `).join('');
+                document.querySelectorAll('.startOrder').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        let oid = btn.dataset.oid;
+                        let arr = getOrders();
+                        let ord = arr.find(x => x.oid === oid);
+                        if (ord && ord.status === 'accepted') {
+                            ord.status = 'in_progress';
+                            setOrders(arr);
+                            alert("订单已开始，完成后请点击确认完成");
+                            renderApp();
+                        }
+                    });
+                });
+                document.querySelectorAll('.completeOrder').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        let oid = btn.dataset.oid;
+                        let arr = getOrders();
+                        let ord = arr.find(x => x.oid === oid);
+                        if (ord && ord.status === 'in_progress') {
+                            let users = getUsers();
+                            let user = users.find(uu => uu.uid === ord.userId);
+                            if (user && user.balance >= ord.price) {
+                                user.balance -= ord.price;
+                                setUsers(users);
+                                let gamers = getGamers();
+                                let gamer = gamers.find(g => g.gid === ord.gamerId);
+                                if (gamer) {
+                                    gamer.balance += ord.price;
+                                    gamer.totalOrders += 1;
+                                    setGamers(gamers);
+                                }
+                                ord.status = 'completed';
+                                ord.completeTime = Date.now();
+                                setOrders(arr);
+                                alert("订单完成，款项已支付给打手");
+                                renderApp();
+                            } else alert("余额不足，请充值");
+                        }
+                    });
+                });
+                document.querySelectorAll('.cancelOrder').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        let oid = btn.dataset.oid;
+                        let arr = getOrders();
+                        let ord = arr.find(x => x.oid === oid);
+                        if (ord && ord.status === 'waiting') {
+                            ord.status = 'cancelled';
+                            setOrders(arr);
+                            alert("点单已取消");
+                            renderApp();
+                        }
+                    });
+                });
+                document.querySelectorAll('.submitReview').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        let oid = btn.dataset.oid;
+                        let review = document.getElementById(`review_${oid}`).value;
+                        if (review) {
+                            let arr = getOrders();
+                            let ord = arr.find(x => x.oid === oid);
+                            if (ord) { ord.review = review; setOrders(arr); alert("评价已提交"); renderApp(); }
+                        }
+                    });
+                });
+            }
+        }
+
+        document.getElementById('publishEquipBtn')?.addEventListener('click', () => {
+            let title = document.getElementById('equipTitle').value;
+            let price = parseInt(document.getElementById('equipPrice').value);
+            let img = document.getElementById('equipImg').value;
+            let contact = document.getElementById('equipContact').value;
+            let desc = document.getElementById('equipDesc').value;
+            if (!title || !price || !img || !contact) { alert("请完整填写装备名称、价格、图片链接、联系方式"); return; }
+            let eqs = getEquipment();
+            eqs.push({ eid: 'e' + Date.now(), sellerId: u.uid, sellerName: u.username, title: title, price: price, imgUrl: img, contact: contact, desc: desc, status: '出售', createTime: Date.now() });
+            setEquipment(eqs);
+            alert("装备已上架");
+            renderApp();
+        });
+
+        let equipDiv = document.getElementById('equipList');
+        if (equipDiv) {
+            if (equipments.length === 0) equipDiv.innerHTML = "<div>暂无装备出售</div>";
+            else {
+                equipDiv.innerHTML = equipments.map(e => `
+                    <div class="equip-item">
+                        <b>${e.title}</b>  ¥${e.price}<br>
+                        <img src="${e.imgUrl}" class="equip-img" onerror="this.src='https://picsum.photos/id/20/200/150'" style="max-width:100%; border-radius:12px;"><br>
+                        卖家：${e.sellerName} | 联系：${e.contact}<br>
+                        描述：${e.desc || '无'}<br>
+                        <button class="buyEquip" data-eid="${e.eid}" data-price="${e.price}" data-seller="${e.sellerId}">立即购买</button>
+                    </div>
+                `).join('');
+                document.querySelectorAll('.buyEquip').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        let eid = btn.dataset.eid;
+                        let price = parseInt(btn.dataset.price);
+                        let sellerId = btn.dataset.seller;
+                        if (u.balance >= price) {
+                            let users = getUsers();
+                            let buyer = users.find(us => us.uid === u.uid);
+                            let seller = users.find(us => us.uid === sellerId);
+                            if (buyer && seller) {
+                                buyer.balance -= price;
+                                seller.balance += price;
+                                setUsers(users);
+                                let eqs = getEquipment().filter(eq => eq.eid !== eid);
+                                setEquipment(eqs);
+                                alert(`购买成功！请联系卖家 ${seller.username} 交易`);
+                                renderApp();
+                            } else alert("卖家不存在");
+                        } else alert("余额不足，请充值");
+                    });
+                });
+            }
+        }
+
+        let myEquipDiv = document.getElementById('myEquipList');
+        if (myEquipDiv) {
+            if (myEquipments.length === 0) myEquipDiv.innerHTML = "<div>暂无发布</div>";
+            else {
+                myEquipDiv.innerHTML = myEquipments.map(e => `
+                    <div class="equip-item">
+                        <b>${e.title}</b>  ¥${e.price}<br>
+                        <img src="${e.imgUrl}" style="max-width:80px; border-radius:8px;"><br>
+                        联系：${e.contact}<br>
+                        <button class="delEquip" data-eid="${e.eid}">下架</button>
+                    </div>
+                `).join('');
+                document.querySelectorAll('.delEquip').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        let eqs = getEquipment().filter(eq => eq.eid !== btn.dataset.eid);
+                        setEquipment(eqs);
+                        alert("已下架");
+                        renderApp();
+                    });
+                });
+            }
+        }
+    }
+
+    function renderGamerPanel() {
+        let g = currentUser;
+        let announcements = getAnnouncements();
+        if (!g.approved) {
+            document.getElementById('app').innerHTML = `<div class="card"><h2>⏳ 账号正在审核中</h2><p>管理员通过后才能接单</p><button id="logoutBtn">退出</button></div>`;
+            document.getElementById('logoutBtn')?.addEventListener('click', () => { localStorage.removeItem('club_session'); renderApp(); });
+            return;
+        }
+        let myOrders = getOrders().filter(o => o.gamerId === g.gid);
+        let availableOrders = getOrders().filter(o => o.status === 'waiting' && (!o.gamerId || o.gamerId === g.gid));
+        let html = `
+            <div class="card">
+                ${announcements.gamer ? `<div class="announcement">📢 打手公告：${announcements.gamer}</div>` : ''}
+                <h2>🔫 打手：${g.username}</h2>
+                <div>💰 余额：${g.balance} 元</div>
+                <div>⭐ 评分：${g.avgRating} | 总单量：${g.totalOrders}</div>
+                <div class="flex">
+                    <button id="logoutBtn" class="gray-btn">退出</button>
+                    <button id="withdrawBtn" class="gray-btn">提现申请</button>
+                </div>
+            </div>
+            <div class="card">
+                <h3>🛠️ 设置我的段位/物资技能与报价</h3>
+                <div id="skillsList"></div>
+                <div class="flex">
+                    <select id="skillType">
+                        <option value="段位">段位</option>
+                        <option value="物资">物资</option>
+                    </select>
+                    <input id="skillTarget" placeholder="目标（王牌/热成像等）">
+                    <input id="skillPrice" placeholder="价格（元）">
+                </div>
+                <button id="addSkillBtn">添加技能报价</button>
+            </div>
+            <div class="card"><h3>📢 可接点单</h3><div id="availableOrders"></div></div>
+            <div class="card"><h3>📋 我的接单</h3><div id="myOrdersList"></div></div>
+        `;
+        document.getElementById('app').innerHTML = html;
+        document.getElementById('logoutBtn')?.addEventListener('click', () => { localStorage.removeItem('club_session'); renderApp(); });
+        document.getElementById('withdrawBtn')?.addEventListener('click', () => {
+            let amt = prompt("提现金额");
+            let acc = prompt("账号");
+            if (amt && acc) {
+                let reqs = getWithdrawReqs();
+                reqs.push({ id: Date.now(), userId: g.gid, amount: parseInt(amt), account: acc, status: 'pending', type: 'gamer' });
+                setWithdrawReqs(reqs);
+                alert("提现申请已提交");
+            }
+        });
+
+        let skillsDiv = document.getElementById('skillsList');
+        if (skillsDiv) {
+            skillsDiv.innerHTML = g.skills.map((sk, idx) => `<div>${sk.type}·${sk.target} ¥${sk.price} <button class="delSkill" data-idx="${idx}">删除</button></div>`).join('');
+            document.querySelectorAll('.delSkill').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    let idx = parseInt(btn.dataset.idx);
+                    g.skills.splice(idx, 1);
+                    let gamers = getGamers();
+                    let index = gamers.findIndex(gg => gg.gid === g.gid);
+                    if (index !== -1) gamers[index] = g;
+                    setGamers(gamers);
+                    renderApp();
+                });
+            });
+        }
+        document.getElementById('addSkillBtn')?.addEventListener('click', () => {
+            let type = document.getElementById('skillType').value;
+            let target = document.getElementById('skillTarget').value;
+            let price = parseInt(document.getElementById('skillPrice').value);
+            if (type && target && price) {
+                g.skills.push({ type, target, price });
+                let gamers = getGamers();
+                let index = gamers.findIndex(gg => gg.gid === g.gid);
+                if (index !== -1) gamers[index] = g;
+                setGamers(gamers);
+                renderApp();
+            } else alert("填完整");
+        });
+
+        let availDiv = document.getElementById('availableOrders');
+        if (availDiv) {
+            availDiv.innerHTML = availableOrders.map(o => `
+                <div class="order-item">
+                    <div>👤 ${o.userName} 出价 ¥${o.price}</div>
+                    <div>需求：${o.description}</div>
+                    <button class="acceptOrder" data-oid="${o.oid}">接单</button>
+                </div>
+            `).join('');
+            document.querySelectorAll('.acceptOrder').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    let oid = btn.dataset.oid;
+                    let orders = getOrders();
+                    let ord = orders.find(x => x.oid === oid);
+                    if (ord && ord.status === 'waiting') {
+                        ord.status = 'accepted';
+                        ord.gamerId = g.gid;
+                        ord.gamerName = g.username;
+                        setOrders(orders);
+                        alert("接单成功，等待玩家确认开始");
+                        renderApp();
+                    }
+                });
+            });
+        }
+
+        let myDiv = document.getElementById('myOrdersList');
+        if (myDiv) {
+            myDiv.innerHTML = myOrders.map(o => `
+                <div class="order-item">
+                    <div>订单：${o.description} | 金额 ¥${o.price}</div>
+                    <div>状态：${o.status}</div>
+                    ${o.status === 'in_progress' ? `<button class="finishOrder" data-oid="${o.oid}">标记完成</button>` : ''}
+                </div>
+            `).join('');
+            document.querySelectorAll('.finishOrder').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    let oid = btn.dataset.oid;
+                    let orders = getOrders();
+                    let ord = orders.find(x => x.oid === oid);
+                    if (ord && ord.status === 'in_progress') {
+                        ord.status = 'completed';
+                        setOrders(orders);
+                        alert("已标记完成，等待用户确认自动结算");
+                        renderApp();
+                    }
+                });
+            });
+        }
+    }
+
+    function renderAdminPanel() {
+        let users = getUsers();
+        let gamers = getGamers();
+        let orders = getOrders();
+        let equipments = getEquipment();
+        let rechargeReqs = getRechargeReqs();
+        let withdrawReqs = getWithdrawReqs();
+        let complaints = getComplaints();
+        let announcements = getAnnouncements();
+        let html = `
+            <div class="card">
+                <h2>👑 管理后台</h2>
+                <button id="logoutAdmin" class="gray-btn">退出</button>
+            </div>
+            <div class="card"><h3>📊 统计</h3><div>玩家：${users.length} | 打手：${gamers.length} | 点单：${orders.length} | 装备：${equipments.length} | 投诉：${complaints.length}</div></div>
+            <div class="card"><h3>📢 发送公告</h3>
+                <div style="margin-bottom:12px;"><strong>用户版公告：</strong><br><textarea id="userAnnouncement" rows="2" placeholder="发送给所有玩家的公告">${announcements.user}</textarea><button id="sendUserAnnouncement">发送用户公告</button></div>
+                <div><strong>打手版公告：</strong><br><textarea id="gamerAnnouncement" rows="2" placeholder="发送给所有打手的公告">${announcements.gamer}</textarea><button id="sendGamerAnnouncement">发送打手公告</button></div>
+            </div>
+            <div class="card"><h3>➕ 创建玩家账号</h3>
+                <input type="text" id="newUserName" placeholder="玩家昵称">
+                <input type="text" id="newUserLogin" placeholder="登录账号">
+                <input type="password" id="newUserPwd" placeholder="密码">
+                <button id="createUserBtn">创建玩家</button>
+            </div>
+            <div class="card"><h3>➕ 创建打手账号</h3>
+                <input type="text" id="newGamerName" placeholder="打手昵称">
+                <input type="text" id="newGamerLogin" placeholder="登录账号">
+                <input type="password" id="newGamerPwd" placeholder="密码">
+                <button id="createGamerBtn">创建打手</button>
+            </div>
+            <div class="card"><h3>👥 玩家管理</h3><div id="userList"></div></div>
+            <div class="card"><h3>🔫 打手管理</h3><div id="gamerListAdmin"></div></div>
+            <div class="card"><h3>💰 充值审核</h3><div id="rechargeReqs"></div></div>
+            <div class="card"><h3>💸 提现审核</h3><div id="withdrawReqs"></div></div>
+            <div class="card"><h3>📦 装备管理</h3><div id="equipManage"></div></div>
+            <div class="card"><h3>📋 点单管理</h3><div id="orderListAdmin"></div></div>
+            <div class="card"><h3>⚠️ 投诉管理（退款+封禁打手）</h3><div id="complaintListAdmin"></div></div>
+        `;
+        document.getElementById('app').innerHTML = html;
+        document.getElementById('logoutAdmin')?.addEventListener('click', () => { localStorage.removeItem('club_session'); renderApp(); });
+
+        // 发送公告
+        document.getElementById('sendUserAnnouncement')?.addEventListener('click', () => {
+            let content = document.getElementById('userAnnouncement').value;
+            let ann = getAnnouncements();
+            ann.user = content;
+            setAnnouncements(ann);
+            alert("用户公告已发送");
+        });
+        document.getElementById('sendGamerAnnouncement')?.addEventListener('click', () => {
+            let content = document.getElementById('gamerAnnouncement').value;
+            let ann = getAnnouncements();
+            ann.gamer = content;
+            setAnnouncements(ann);
+            alert("打手公告已发送");
+        });
+
+        // 创建玩家
+        document.getElementById('createUserBtn')?.addEventListener('click', () => {
+            let name = document.getElementById('newUserName').value;
+            let login = document.getElementById('newUserLogin').value;
+            let pwd = document.getElementById('newUserPwd').value;
+            if (!name || !login || !pwd) { alert("请完整填写昵称、账号、密码"); return; }
+            let users = getUsers();
+            if (users.find(u => u.loginId === login)) { alert("玩家账号已存在"); return; }
+            let newUser = { uid: 'u' + Date.now(), username: name, loginId: login, pwd: pwd, phone: '', role: 'user', balance: 0, banned: false, regTime: Date.now() };
+            users.push(newUser);
+            setUsers(users);
+            alert(`玩家 ${name} 创建成功，账号 ${login}`);
+            renderAdminPanel();
+        });
+
+        document.getElementById('createGamerBtn')?.addEventListener('click', () => {
+            let name = document.getElementById('newGamerName').value;
+            let login = document.getElementById('newGamerLogin').value;
+            let pwd = document.getElementById('newGamerPwd').value;
+            if (!name || !login || !pwd) { alert("请完整填写昵称、账号、密码"); return; }
+            let gamers = getGamers();
+            if (gamers.find(g => g.loginId === login)) { alert("打手账号已存在"); return; }
+            let newGamer = { gid: 'g' + Date.now(), username: name, loginId: login, pwd: pwd, phone: '', skills: [], balance: 0, banned: false, avgRating: 0, totalOrders: 0, regTime: Date.now(), approved: true };
+            gamers.push(newGamer);
+            setGamers(gamers);
+            alert(`打手 ${name} 创建成功，账号 ${login}`);
+            renderAdminPanel();
+        });
+
+        let userDiv = document.getElementById('userList');
+        userDiv.innerHTML = users.map(u => `<div>${u.username} 余额${u.balance} ${u.banned?'[封禁]':''} <button class="banUser" data-uid="${u.uid}">封禁/解封</button> <button class="addBalance" data-uid="${u.uid}">加余额</button></div>`).join('');
+        document.querySelectorAll('.banUser').forEach(btn => {
+            btn.addEventListener('click', () => {
+                let uid = btn.dataset.uid;
+                let arr = getUsers();
+                let u = arr.find(x => x.uid === uid);
+                if (u) u.banned = !u.banned;
+                setUsers(arr);
+                renderAdminPanel();
+            });
+        });
+        document.querySelectorAll('.addBalance').forEach(btn => {
+            btn.addEventListener('click', () => {
+                let uid = btn.dataset.uid;
+                let amt = prompt("增加余额");
+                if (amt) {
+                    let arr = getUsers();
+                    let u = arr.find(x => x.uid === uid);
+                    if (u) u.balance += parseInt(amt);
+                    setUsers(arr);
+                    renderAdminPanel();
+                }
+            });
+        });
+
+        let gamerDiv = document.getElementById('gamerListAdmin');
+        gamerDiv.innerHTML = gamers.map(g => `<div>${g.username} 余额${g.balance} ${g.banned?'[封禁]':''} <button class="banGamer" data-gid="${g.gid}">封禁/解封</button> <button class="delGamer" data-gid="${g.gid}">删除</button></div>`).join('');
+        document.querySelectorAll('.banGamer').forEach(btn => {
+            btn.addEventListener('click', () => {
+                let gid = btn.dataset.gid;
+                let arr = getGamers();
+                let g = arr.find(x => x.gid === gid);
+                if (g) g.banned = !g.banned;
+                setGamers(arr);
+                renderAdminPanel();
+            });
+        });
+        document.querySelectorAll('.delGamer').forEach(btn => {
+            btn.addEventListener('click', () => {
+                let gid = btn.dataset.gid;
+                let arr = getGamers().filter(x => x.gid !== gid);
+                setGamers(arr);
+                renderAdminPanel();
+            });
+        });
+
+        let rechargeDiv = document.getElementById('rechargeReqs');
+        rechargeDiv.innerHTML = rechargeReqs.map(r => `<div>用户${r.userId} 金额${r.amount} <button class="confirmRecharge" data-id="${r.id}">确认到账</button> <button class="rejectRecharge" data-id="${r.id}">驳回</button></div>`).join('');
+        document.querySelectorAll('.confirmRecharge').forEach(btn => {
+            btn.addEventListener('click', () => {
+                let rid = parseInt(btn.dataset.id);
+                let reqs = getRechargeReqs();
+                let req = reqs.find(x => x.id === rid);
+                if (req) {
+                    if (req.type === 'user') changeUserBalance(req.userId, req.amount);
+                    else changeGamerBalance(req.userId, req.amount);
+                    setRechargeReqs(reqs.filter(x => x.id !== rid));
+                    renderAdminPanel();
+                }
+            });
+        });
+        document.querySelectorAll('.rejectRecharge').forEach(btn => {
+            btn.addEventListener('click', () => {
+                let rid = parseInt(btn.dataset.id);
+                setRechargeReqs(getRechargeReqs().filter(x => x.id !== rid));
+                renderAdminPanel();
+            });
+        });
+
+        let withdrawDiv = document.getElementById('withdrawReqs');
+        withdrawDiv.innerHTML = withdrawReqs.map(w => `<div>用户${w.userId} 金额${w.amount} 账号${w.account} <button class="confirmWithdraw" data-id="${w.id}">确认打款</button> <button class="rejectWithdraw" data-id="${w.id}">驳回</button></div>`).join('');
+        document.querySelectorAll('.confirmWithdraw').forEach(btn => {
+            btn.addEventListener('click', () => {
+                let wid = parseInt(btn.dataset.id);
+                setWithdrawReqs(getWithdrawReqs().filter(x => x.id !== wid));
+                alert("打款完成（演示）");
+                renderAdminPanel();
+            });
+        });
+        document.querySelectorAll('.rejectWithdraw').forEach(btn => {
+            btn.addEventListener('click', () => {
+                let wid = parseInt(btn.dataset.id);
+                setWithdrawReqs(getWithdrawReqs().filter(x => x.id !== wid));
+                renderAdminPanel();
+            });
+        });
+
+        let equipManageDiv = document.getElementById('equipManage');
+        equipManageDiv.innerHTML = equipments.map(e => `<div>${e.title} 卖家${e.sellerName} 价格${e.price} <button class="offShelfEquip" data-eid="${e.eid}">强制下架</button></div>`).join('');
+        document.querySelectorAll('.offShelfEquip').forEach(btn => {
+            btn.addEventListener('click', () => {
+                let eid = btn.dataset.eid;
+                setEquipment(getEquipment().filter(eq => eq.eid !== eid));
+                renderAdminPanel();
+            });
+        });
+
+        let orderDiv = document.getElementById('orderListAdmin');
+        orderDiv.innerHTML = orders.map(o => `<div>${o.userName} -> ${o.gamerName || '未接'} 金额${o.price} 状态${o.status} <button class="cancelOrderAdmin" data-oid="${o.oid}">强制取消</button></div>`).join('');
+        document.querySelectorAll('.cancelOrderAdmin').forEach(btn => {
+            btn.addEventListener('click', () => {
+                let oid = btn.dataset.oid;
+                setOrders(getOrders().filter(x => x.oid !== oid));
+                renderAdminPanel();
+            });
+        });
+
+        // 投诉管理
+        let complaintDiv = document.getElementById('complaintListAdmin');
+        if (complaintDiv) {
+            if (complaints.length === 0) complaintDiv.innerHTML = "<div>暂无投诉</div>";
+            else {
+                complaintDiv.innerHTML = complaints.map(c => `
+                    <div class="order-item" style="background:#fff5e6;">
+                        <div><b>订单号：${c.oid.slice(-6)}</b> | 玩家：${c.userName} | 打手：${c.gamerName}</div>
+                        <div>投诉原因：${c.reason}</div>
+                        <div>状态：${c.status === 'pending' ? '待处理' : '已处理'}</div>
+                        ${c.status === 'pending' ? `<button class="refundAndBan" data-id="${c.id}" data-oid="${c.oid}" data-gamer="${c.gamerId}" data-user="${c.userId}" data-amount="${getOrders().find(o=>o.oid===c.oid)?.price || 0}">✅ 退款并封禁打手</button>` : ''}
+                    </div>
+                `).join('');
+                document.querySelectorAll('.refundAndBan').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        let cid = parseInt(btn.dataset.id);
+                        let oid = btn.dataset.oid;
+                        let gamerId = btn.dataset.gamer;
+                        let userId = btn.dataset.user;
+                        let amount = parseInt(btn.dataset.amount);
+                        // 退款给玩家
+                        changeUserBalance(userId, amount);
+                        // 封禁打手
+                        let gamers = getGamers();
+                        let gamer = gamers.find(g => g.gid === gamerId);
+                        if (gamer) gamer.banned = true;
+                        setGamers(gamers);
+                        // 更新投诉状态
+                        let complaintsArr = getComplaints();
+                        let complaint = complaintsArr.find(c => c.id === cid);
+                        if (complaint) complaint.status = 'refunded';
+                        setComplaints(complaintsArr);
+                        alert("已退款给玩家并封禁打手账号");
+                        renderAdminPanel();
+                    });
+                });
+            }
+        }
+    }
+
+    renderApp();
+})();
+</script>
+</body>
+</html>
